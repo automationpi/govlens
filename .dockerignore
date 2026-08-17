@@ -1,0 +1,8 @@
+pgdata/
+.git/
+*.md
+web.env
+bin/govlens-remediator.env
+bin/remediator.pem
+remediator.env
+grantworker.env

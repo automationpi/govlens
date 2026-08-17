@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GovLens - Operator Guide</title>
+<link rel="stylesheet" href="assets/guide.css">
+</head>
+<body>
+<div class="topbar">
+  <span class="brand">Gov<span class="lens">Lens</span></span>
+  <nav class="gnav"><a href="index.html">User Guide</a><a href="operator.html" class="active">Operator Guide</a></nav>
+  <span style="flex:1"></span>
+  <span class="tag">deploy · configure · operate</span>
+</div>
+
+<div class="layout">
+<nav class="toc">
+  <h4>Plan</h4>
+  <a href="#arch">Architecture</a>
+  <a href="#prereqs">Prerequisites</a>
+  <h4>Provision (Azure)</h4>
+  <a href="#sps">Service principals</a>
+  <a href="#webapp">Web sign-in app</a>
+  <h4>Configure &amp; run</h4>
+  <a href="#config">Config reference</a>
+  <a href="#secrets">Secrets</a>
+  <a href="#run">Running it</a>
+  <a href="#database">Database</a>
+  <h4>Go live</h4>
+  <a href="#bootstrap">First run</a>
+  <a href="#enable">Enabling self-service</a>
+  <h4>Operate</h4>
+  <a href="#ops">Day-2 operations</a>
+  <a href="#rotate">Rotating credentials</a>
+  <a href="#upgrade">Upgrading</a>
+  <a href="#hardening">Hardening</a>
+  <a href="#trouble">Troubleshooting</a>
+</nav>
+
+<main>
+  <h1>GovLens Operator Guide</h1>
+  <p class="lead">How to deploy, configure, secure, and run GovLens for your organization. For the
+  end-user experience (requesting/approving access), see the <a href="index.html">User Guide</a>.</p>
+
+  <h2 id="arch">Architecture</h2>
+  <p>GovLens is one container image running against <b>your own Postgres</b>. Inside it a small launcher
+  supervises the web app plus the enabled background workers. Each worker uses a <b>separate, least-privilege
+  service principal</b>, so no single component can both read broadly and change access.</p>
+  <div class="arch">
+    <div class="col">
+      <div class="colhead">People</div>
+      <div class="box"><b>Users &amp; approvers</b><span class="s">Browser → GovLens web. Sign in via your IdP (Entra SSO).</span></div>
+    </div>
+    <div class="col">
+      <div class="colhead">GovLens (one container)</div>
+      <div class="box"><b>Web app</b><span class="s">Serves the UI. Only reads/writes the request queue - never touches Azure.</span></div>
+      <div class="box read"><b>Collector</b><span class="s">read-only SP → pulls governance data</span></div>
+      <div class="box del"><b>Remediator</b><span class="s">delete-only SP → executes approved revokes + grant expiry</span></div>
+      <div class="box write"><b>Grant worker</b><span class="s">write-only SP → provisions approved grants</span></div>
+    </div>
+    <div class="col">
+      <div class="colhead">Your infrastructure</div>
+      <div class="box db"><b>Postgres</b><span class="s">State + audit trail. You bring it; GovLens creates its own schema.</span></div>
+      <div class="box"><b>Azure ARM &amp; Microsoft Graph</b><span class="s">The read/write targets, reached only by the workers.</span></div>
+    </div>
+    <div class="lgd">Green = read-only · Red = delete-only · Blue = write-only · Amber = your database. The web app holds no Azure credential.</div>
+  </div>
+
+  <h2 id="prereqs">Prerequisites</h2>
+  <ul>
+    <li><b>A Postgres database</b> and a connection string. The DB user needs create-table rights (GovLens
+    builds its own schema on first start). Treat it as the audit store - back it up.</li>
+    <li><b>An Entra tenant</b> and rights to create <b>app registrations / service principals</b> and
+    <b>custom roles</b> (Application Administrator + Owner/User Access Administrator at your management-group root, or equivalent).</li>
+    <li><b>A container runtime</b> (Docker/Podman/Kubernetes) able to run the image and mount a config file.</li>
+    <li>The <b>Azure CLI</b> (<code>az</code>) for the provisioning steps below.</li>
+  </ul>
+
+  <h2 id="sps">Service principals</h2>
+  <p>Create three least-privilege SPs, each assigned at your tenant/management-group root. Each can use a
+  <b>certificate</b> (<code>--create-cert</code>) or a <b>client secret</b> - your choice per SP.</p>
+  <pre class="cmd"><span class="c"># set your management-group (or tenant root) scope</span>
+MG=<span class="k">"/providers/Microsoft.Management/managementGroups/&lt;mg-or-tenant-root&gt;"</span>
+
+<span class="c"># 1) COLLECTOR - read-only. Reader (ARM) at the root...</span>
+az ad sp create-for-rbac --name govlens-collector --role Reader --scopes <span class="k">"$MG"</span> --create-cert
+<span class="c">#    ...plus Microsoft Graph *application* permissions (admin-consented):</span>
+<span class="c">#    Directory.Read.All, RoleManagement.Read.Directory, Policy.Read.All,</span>
+<span class="c">#    Application.Read.All, Group.Read.All, User.Read.All, Reports.Read.All …</span>
+<span class="c">#    (grant via `az ad app permission add` + `az ad app permission admin-consent`)</span>
+
+<span class="c"># 2) REMEDIATOR - delete-only custom role, then the SP</span>
+cat &gt; remediator-role.json &lt;&lt;EOF
+{ "Name":"GovLens Remediator",
+  "Description":"Deletes role assignments for approved revokes.",
+  "Actions":["Microsoft.Authorization/roleAssignments/read",
+             "Microsoft.Authorization/roleAssignments/delete"],
+  "AssignableScopes":["$MG"] }
+EOF
+az role definition create --role-definition remediator-role.json
+az ad sp create-for-rbac --name govlens-remediator --role <span class="k">"GovLens Remediator"</span> --scopes <span class="k">"$MG"</span> --create-cert
+
+<span class="c"># 3) GRANT - write-only custom role, then the SP</span>
+cat &gt; grant-role.json &lt;&lt;EOF
+{ "Name":"GovLens Access Provisioner",
+  "Description":"Creates role assignments for approved grants.",
+  "Actions":["Microsoft.Authorization/roleAssignments/read",
+             "Microsoft.Authorization/roleAssignments/write",
+             "Microsoft.Authorization/permissions/read"],
+  "AssignableScopes":["$MG"] }
+EOF
+az role definition create --role-definition grant-role.json
+az ad sp create-for-rbac --name govlens-grant --role <span class="k">"GovLens Access Provisioner"</span> --scopes <span class="k">"$MG"</span> --create-cert</pre>
+  <div class="note"><b>Least privilege by design.</b> The grant SP can <i>write</i> role assignments but has
+  <b>no delete</b>; expiry-revocation is handled by the remediator's delete role. The <code>permissions/read</code>
+  action lets the grant worker self-verify (the readiness probe) without any broader access.</div>
+  <div class="tip"><b>Secret instead of cert:</b> drop <code>--create-cert</code> to get a client secret in the
+  command output, or run <code>az ad app credential reset --id &lt;app-id&gt;</code>. Put it in the config as
+  <code>secret:</code> instead of <code>cert:</code>.</div>
+  <p>Note each SP's <b>app id</b> and keep its <b>cert PEM / secret</b> - you'll reference them in the config.
+  Enable only the modules you need: a revoke-only deployment doesn't need the grant SP, and vice-versa.</p>
+
+  <h2 id="webapp">Web sign-in app</h2>
+  <p>Register one more app for user sign-in (OpenID Connect). This is separate from the workers and holds no Azure roles.</p>
+  <pre class="cmd">az ad app create --display-name govlens-web \
+  --web-redirect-uris <span class="k">https://govlens.example.com/auth/callback</span> \
+  --enable-id-token-issuance true
+az ad app credential reset --id <span class="k">&lt;web-app-id&gt;</span>   <span class="c"># → client secret for the config</span></pre>
+  <p>The redirect URI must exactly match <code>auth.redirect_url</code> in your config. Users just need to be
+  able to sign in; their GovLens roles come from GovLens's own grants.</p>
+
+  <h2 id="config">Config reference</h2>
+  <p>Everything lives in one <code>config.yaml</code>. See <code>config.example.yaml</code> in the repo for a
+  filled-in template.</p>
+  <table>
+    <tr><th>Key</th><th>Meaning</th></tr>
+    <tr><td><code>tenant.label</code></td><td>Stable key shown in the UI (default: the SP tenant id).</td></tr>
+    <tr><td><code>database.dsn</code> <b>(required)</b></td><td>Your Postgres connection string. GovLens never manages a DB.</td></tr>
+    <tr><td><code>server.addr</code></td><td>Listen address (default <code>:8080</code>).</td></tr>
+    <tr><td><code>auth.mode</code></td><td><code>entra</code> | <code>oidc</code> | <code>dev</code> | <code>off</code>.</td></tr>
+    <tr><td><code>auth.entra_tenant</code> / <code>oidc_issuer</code></td><td>Your tenant id (entra) or issuer URL (generic OIDC).</td></tr>
+    <tr><td><code>auth.oidc_client_id/secret</code></td><td>The web sign-in app's credentials.</td></tr>
+    <tr><td><code>auth.redirect_url</code></td><td>Must match the app registration's redirect URI.</td></tr>
+    <tr><td><code>auth.session_secret</code></td><td>Random string signing session cookies (required when auth is on).</td></tr>
+    <tr><td><code>auth.admin_emails</code></td><td>Bootstrap global admins (list).</td></tr>
+    <tr><td><code>service_principals.{collector,remediator,grant}</code></td><td>Each: <code>app_id</code> + <code>cert</code> <i>or</i> <code>secret</code>. Grant also needs <code>root_scope</code>.</td></tr>
+    <tr><td><code>modules.{…}.enabled / execute / interval</code></td><td>Toggle each worker; <code>execute:false</code> = dry-run; interval in seconds.</td></tr>
+  </table>
+
+  <h2 id="secrets">Secrets: cert, secret, or ${ENV}</h2>
+  <ul>
+    <li><b>Per SP</b>: use either <code>cert:</code> (a file path, an inline PEM, or base64 PEM) or <code>secret:</code> (a client secret).</li>
+    <li><b>${ENV} interpolation</b>: any value may reference an environment variable, e.g.
+    <code>dsn: "${DATABASE_URL}"</code> or <code>secret: "${GRANT_SECRET}"</code>. Missing vars become empty and
+    validation fails fast with a clear message. Mix inline and env however you like.</li>
+    <li>Keep certs/secrets out of the image - mount them or pass via environment. The config file itself is
+    safe to keep in source control if all secrets are <code>${ENV}</code> references.</li>
+  </ul>
+
+  <h2 id="run">Running it</h2>
+  <pre class="cmd">docker run -d --name govlens \
+  -v ./config.yaml:/etc/govlens/config.yaml:ro \
+  -v ./secrets:/secrets:ro \                 <span class="c"># if you use cert file paths</span>
+  -e DATABASE_URL=… -e OIDC_CLIENT_SECRET=… -e GOVLENS_SESSION_SECRET=… \
+  -e GRANT_SECRET=… \
+  -p 8080:8080 \
+  <span class="k">ghcr.io/automationpi/govlens</span></pre>
+  <p>The launcher (<code>govlensd</code>) applies the schema, then starts and supervises the web app and each
+  enabled worker, restarting any that exit. Put GovLens behind your reverse proxy / TLS terminator; the
+  redirect URL must be the public HTTPS address.</p>
+  <div class="tip"><b>Single component (advanced):</b> the image also contains <code>/web</code>, <code>/collect</code>,
+  <code>/remediator</code>, <code>/grantworker</code>, <code>/ingest</code>. Override the entrypoint to run just one
+  (useful for Kubernetes, where you'd run each as its own Deployment/CronJob).</div>
+
+  <h2 id="database">Database</h2>
+  <ul>
+    <li>Point <code>database.dsn</code> at any reachable Postgres. Schema is created/migrated automatically on
+    start (additive, idempotent) - upgrades need no manual migration.</li>
+    <li>The <code>access_requests</code> table is your <b>audit trail</b> (who requested/approved/provisioned/expired).
+    Back it up and retain per your policy.</li>
+    <li>Use TLS to the database (<code>sslmode=require</code>) in production.</li>
+  </ul>
+
+  <h2 id="bootstrap">First run</h2>
+  <ol class="steps">
+    <li>Start with <code>auth.admin_emails</code> set to yourself - you become a global admin on first sign-in.</li>
+    <li>Sign in, open <b>Admin</b>, and grant approver/admin roles to others (global or per-subscription).</li>
+    <li>Let the collector run once (or wait for its interval) so the dashboard populates and the role catalog
+    is discovered.</li>
+  </ol>
+
+  <h2 id="enable">Enabling self-service (the gates)</h2>
+  <p>The grant module is <b>off by default</b> and only goes live when a fail-closed checklist is green,
+  visible on the Admin page:</p>
+  <ol>
+    <li><b>Capability on</b> - global admin turns it on.</li>
+    <li><b>Grant SP verified</b> - enter the grant SP identity and run the <b>readiness probe</b> (confirms it can
+    write role assignments and is not over-permissioned). A stale probe (24h) re-closes the module.</li>
+    <li><b>Tier policy acknowledged</b> - review each level's rules.</li>
+    <li><b>Catalog</b> - auto-discovered on collection.</li>
+    <li><b>Subscription opt-in</b> - each subscription admin opts their subscription in.</li>
+    <li><b>Go live</b> - allowed only when every gate above passes.</li>
+  </ol>
+  <div class="shot">
+    <div class="chrome"><span class="dot" style="background:#f6584f"></span><span class="dot" style="background:#f6be3f"></span>
+      <span class="dot" style="background:#2fbe57"></span><span class="url">https://govlens.example.com/admin</span></div>
+    <iframe src="screens/admin.html" style="height:820px" title="Admin - enablement" loading="lazy"></iframe>
+    <div class="cap"><b>Admin</b> - the enablement gates, grant SP + readiness probe, tier policy, guardrails, and subscription opt-in.</div>
+  </div>
+
+  <h2 id="ops">Day-2 operations</h2>
+  <ul>
+    <li><b>Logs</b> are line-prefixed by component (<code>[web]</code>, <code>[collector]</code>,
+    <code>[remediator]</code>, <code>[grantworker]</code>) - one container, greppable streams.</li>
+    <li><b>Health</b>: <code>GET /healthz</code> returns 200 when the web app is up.</li>
+    <li><b>Dry-run first</b>: set <code>execute: false</code> on remediator/grant to watch a full cycle make no
+    changes, then flip to <code>true</code>. This is the safe way to validate before going live.</li>
+    <li><b>Intervals</b>: tune <code>modules.*.interval</code> (seconds). Collector hourly, remediator hourly,
+    grant every few minutes are sensible defaults.</li>
+    <li><b>What to watch</b>: failed grants/revokes in the logs and in request history; the Global-Admin count
+    guard; a grant SP that fails its periodic probe (module auto-closes).</li>
+  </ul>
+
+  <h2 id="rotate">Rotating credentials</h2>
+  <ol>
+    <li>Add a new cert/secret to the SP in Entra (<code>az ad app credential reset</code> - keep the old one until cutover).</li>
+    <li>Update the config (or the <code>${ENV}</code> value) to the new credential.</li>
+    <li>Restart the container; workers re-authenticate on their next cycle.</li>
+    <li>Remove the old credential in Entra.</li>
+  </ol>
+  <p>The web session signing key (<code>auth.session_secret</code>) can be rotated the same way - it just
+  invalidates existing sessions (users re-sign-in).</p>
+
+  <h2 id="upgrade">Upgrading</h2>
+  <ol class="steps">
+    <li>Pull the new image tag.</li>
+    <li>Recreate the container with the same config and volumes.</li>
+    <li>Schema changes apply automatically on start (additive). No manual migration.</li>
+  </ol>
+
+  <h2 id="hardening">Hardening</h2>
+  <ul>
+    <li><b>Separate credentials</b> - never reuse one SP across modules; the read/delete/write split is the point.</li>
+    <li><b>Scope the roots tightly</b> - assign the custom roles at the narrowest management-group/subscription
+    scope that covers what you manage.</li>
+    <li><b>Protected roles &amp; type policy</b> - mark Global Administrator (and peers) non-revocable; block or
+    require global approval for Group/Service-Principal changes.</li>
+    <li><b>TLS everywhere</b> - HTTPS to the web app, <code>sslmode=require</code> to Postgres.</li>
+    <li><b>Least data</b> - enable <code>pseudonymize</code> on the collector if you don't want real principal
+    names stored.</li>
+  </ul>
+
+  <h2 id="trouble">Troubleshooting</h2>
+  <table>
+    <tr><th>Symptom</th><th>Likely cause / fix</th></tr>
+    <tr><td>Container exits at start with a config error</td><td>Validation failed - the message names the missing
+      field (e.g. <code>database.dsn is required</code>, or <code>session_secret</code> when auth is on).</td></tr>
+    <tr><td>Worker logs "read cert / auth failed"</td><td>Wrong cert path/secret, or the <code>${ENV}</code> var isn't
+      set in the container. Certs mounted at 600 must be readable by the container user.</td></tr>
+    <tr><td>Grant module won't go live</td><td>A gate is red - the Go-live banner lists which (SP verification,
+      catalog, or subscription opt-in).</td></tr>
+    <tr><td>Readiness probe fails</td><td>The grant SP lacks <code>roleAssignments/write</code> or
+      <code>permissions/read</code> at the root scope - or it's over-permissioned (holds <code>*</code>). Use the exact custom role above.</td></tr>
+    <tr><td>Approved grant never provisions</td><td>Grant module in dry-run (<code>execute:false</code>), SP unverified this
+      cycle, or the role is no longer requestable under policy. Check <code>[grantworker]</code> logs.</td></tr>
+    <tr><td>User can't request for themselves</td><td>Their session predates OIDC <code>oid</code> capture - sign out and
+      back in once.</td></tr>
+    <tr><td>Dashboard empty</td><td>No collection has run yet, or the collector SP can't read - check
+      <code>[collector]</code> logs and its ARM/Graph permissions.</td></tr>
+  </table>
+</main>
+</div>
+
+<footer>
+  GovLens Operator Guide · deploy, configure, and operate · Screenshots use example data.
+</footer>
+</body>
+</html>

@@ -1,0 +1,49 @@
+# GovLens - single-file deployment config.
+# Run the whole stack from one image against YOUR OWN Postgres:
+#
+#   docker run -v ./config.yaml:/etc/govlens/config.yaml -p 8080:8080 ghcr.io/automationpi/govlens
+#
+# Any value may use ${ENV_VAR} to pull secrets from the environment instead of
+# writing them here - mix inline and ${ENV} however you like.
+# Replace every <placeholder> below with your own values.
+
+tenant:
+  label: example                    # stable key shown in the UI (default: the SP tenant id)
+  # display: "Example Org"         # friendly name (default: the Entra org name)
+
+database:
+  # Bring your own Postgres - GovLens never manages a database. It auto-creates
+  # its schema on first start, so an empty DB (with create-table rights) is enough.
+  dsn: "${DATABASE_URL}"          # e.g. postgres://user:pass@host:5432/govlens?sslmode=require
+
+server:
+  addr: ":8080"
+
+auth:
+  mode: entra                     # entra | oidc | dev | off
+  entra_tenant: <your-tenant-id>
+  oidc_client_id: <web-app-registration-id>
+  oidc_client_secret: "${OIDC_CLIENT_SECRET}"
+  redirect_url: https://govlens.example.com/auth/callback
+  session_secret: "${GOVLENS_SESSION_SECRET}"
+  admin_emails:
+    - you@example.com
+
+# Each service principal takes EITHER a certificate OR a client secret - your
+# choice per SP. cert may be a file path, an inline PEM, or base64-encoded PEM.
+service_principals:
+  collector:                      # read-only: pulls governance data
+    app_id: <collector-app-id>
+    cert: /secrets/collector.pem              # ← cert option (path)
+  remediator:                     # roleAssignments read+delete: executes revokes
+    app_id: <remediator-app-id>
+    secret: "${REMEDIATOR_SECRET}"            # ← secret option
+  grant:                          # roleAssignments read+write: provisions grants
+    app_id: <grant-app-id>
+    cert: /secrets/grant.pem
+    root_scope: /providers/Microsoft.Management/managementGroups/<your-mg-or-tenant-root>
+
+modules:
+  collector:  { enabled: true, interval: 3600 }             # collect every hour
+  remediator: { enabled: true, execute: true, interval: 3600 }
+  grant:      { enabled: true, execute: true, interval: 300 }

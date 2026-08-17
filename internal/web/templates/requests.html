@@ -1,0 +1,169 @@
+{{define "requests.html"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Azure GovLens — Requests · {{.TenantDisplay}}</title>
+{{template "styles"}}
+</head>
+<body>
+<div class="wrap">
+  {{template "topbar" dict "User" .User "Tenant" .Tenant}}
+  <header>
+    <div>
+      <div class="sub">
+        <a class="back" href="/?tenant={{.Tenant}}">← {{.TenantDisplay}}</a> · Requests
+      </div>
+    </div>
+    <div class="sub" style="text-align:right">review workflow</div>
+  </header>
+
+  {{if .Notice}}<div class="warn-banner">{{.Notice}}</div>{{end}}
+
+  {{if or .PendingGrants .GrantLive}}
+  <h2>Access requests — grants
+    <span class="sub">{{len .PendingGrants}} pending{{if .GrantLive}} · <a class="back" href="/request?tenant={{.Tenant}}">+ request access</a>{{end}}</span></h2>
+  <div class="card">
+    {{if .PendingGrants}}
+    <div class="tablewrap"><table>
+      <thead><tr><th>Target</th><th>Role / scope</th><th>Requested</th><th>Decision (set expiry)</th></tr></thead>
+      <tbody>
+      {{range .PendingGrants}}
+        <tr>
+          <td>{{.Principal}}<div class="dom">grant · {{.PrincipalType}}</div></td>
+          <td>{{.Role}}<div class="sub"><code class="scope">{{.Scope}}</code></div></td>
+          <td class="sub">{{.RequestedBy}}<div>{{date .RequestedAt}}{{if .RequestedPermanent}} · asked <strong>no expiry</strong>{{else if .RequestedDays}} · asked {{.RequestedDays}}d{{end}}</div></td>
+          <td>
+            {{if $.User.CanApprove .Scope}}
+            <form method="post" action="/grant/decide" class="decide" style="flex-wrap:wrap;gap:6px">
+              <input type="hidden" name="id" value="{{.ID}}">
+              <input type="hidden" name="tenant" value="{{$.Tenant}}">
+              <input type="number" name="days" min="1" value="{{if .RequestedDays}}{{.RequestedDays}}{{else}}30{{end}}" class="finput" style="max-width:70px" title="expiry in days">
+              <label class="sub"><input type="checkbox" name="permanent" {{if .RequestedPermanent}}checked{{end}}> permanent</label>
+              <input type="text" name="note" placeholder="note" class="finput" style="max-width:140px">
+              <button name="decision" value="approve" class="fbtn" type="submit">Approve</button>
+              <button name="decision" value="reject" class="fbtn breject" type="submit">Reject</button>
+            </form>
+            {{else}}<span class="sub">awaiting approver</span>{{end}}
+          </td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table></div>
+    {{else}}<div class="empty">No grant requests awaiting review.{{if .GrantLive}} <a class="back" href="/request?tenant={{.Tenant}}">Request access →</a>{{end}}</div>{{end}}
+  </div>
+  {{end}}
+
+  <h2>Revoke requests <span class="sub">{{len .PendingRevokes}} pending review</span></h2>
+  <div class="card">
+    {{if .PendingRevokes}}
+    <div class="tablewrap"><table>
+      <thead><tr><th>Target</th><th>Role / scope</th><th>Requested</th><th>Decision</th></tr></thead>
+      <tbody>
+      {{range .PendingRevokes}}
+        <tr>
+          <td>{{.Principal}}<div class="dom">{{.Kind}}{{if .PrincipalType}} · {{.PrincipalType}}{{end}}</div></td>
+          <td>{{.Role}}<div class="sub"><code class="scope">{{.Scope}}</code></div></td>
+          <td class="sub">{{.RequestedBy}}<div>{{date .RequestedAt}}</div></td>
+          <td>
+            {{if $.User.CanApprove .Scope}}
+            <form method="post" action="/revoke/decide" class="decide">
+              <input type="hidden" name="id" value="{{.ID}}">
+              <input type="hidden" name="tenant" value="{{$.Tenant}}">
+              <input type="text" name="note" placeholder="note" class="finput" style="max-width:160px">
+              <button name="decision" value="approve" class="fbtn" type="submit">Approve</button>
+              <button name="decision" value="reject" class="fbtn breject" type="submit">Reject</button>
+            </form>
+            {{else}}<span class="sub">awaiting approver</span>{{end}}
+          </td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table></div>
+    {{else}}<div class="empty">Nothing awaiting review. Mark assignments from a run's detail page.</div>{{end}}
+  </div>
+
+  <h2>History <span class="sub">{{if .Search}}“{{.Search}}” · {{end}}{{.Total}} total{{if not .User.IsApprover}} · your requests{{end}}</span></h2>
+  <div class="card">
+    <form method="get" action="/requests" class="filters" style="margin-bottom:12px">
+      <input type="hidden" name="tenant" value="{{.Tenant}}">
+      <input type="text" name="q" value="{{.Search}}" class="finput" placeholder="search principal, role, scope, or requester…">
+      <button class="fbtn" type="submit">Search</button>
+      {{if .Search}}<a class="markbtn" href="/requests?tenant={{.Tenant}}">Clear</a>{{end}}
+    </form>
+    {{if .History}}
+    <div class="tablewrap"><table>
+      <thead><tr><th>Type</th><th>Target</th><th>Role / scope</th><th>Status</th><th style="min-width:340px">Progress</th></tr></thead>
+      <tbody>
+      {{range .History}}
+        <tr>
+          <td><span class="badge b-{{if eq .Action "grant"}}approved{{else}}removed{{end}}">{{.Action}}</span></td>
+          <td>{{.Principal}}<div class="dom">{{.Kind}}</div></td>
+          <td>{{.Role}}<div class="sub"><code class="scope">{{.Scope}}</code></div></td>
+          <td><span class="badge b-{{.Status}}">{{.Status}}</span></td>
+          <td>
+            <div class="timeline">
+              {{range .Timeline}}
+              <div class="tl-step tl-{{.State}}">
+                <div class="tl-line"><span class="tl-dot"></span><span class="tl-bar"></span></div>
+                <div class="tl-body">
+                  <div class="tl-label">{{.Label}}</div>
+                  <div class="tl-meta">
+                    {{if .Actor}}<span title="{{.Actor}}">{{handle .Actor}}</span><br>{{end}}
+                    {{if not .At.IsZero}}<strong>{{datetime .At}}</strong>{{end}}
+                    {{if .Note}}<div>{{.Note}}</div>{{end}}
+                  </div>
+                </div>
+              </div>
+              {{end}}
+            </div>
+          </td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table></div>
+    <div class="foot" style="border:0;margin-top:12px;padding:0">
+      <span class="sub">Showing {{.FirstRow}}–{{.LastRow}} of {{.Total}}</span>
+      <span class="chips">
+        {{if .HasPrev}}<a class="markbtn" href="/requests?tenant={{.Tenant}}&q={{.Search | urlquery}}&page={{.PrevPage}}">← Prev</a>{{end}}
+        <span class="sub">page {{.Page}}</span>
+        {{if .HasNext}}<a class="markbtn" href="/requests?tenant={{.Tenant}}&q={{.Search | urlquery}}&page={{.NextPage}}">Next →</a>{{end}}
+      </span>
+    </div>
+    {{else}}<div class="empty">{{if .Search}}No requests match “{{.Search}}”.{{else}}No decided requests to show.{{end}}</div>{{end}}
+    {{if .Actors}}
+    <div class="legend" style="margin-top:14px;flex-wrap:wrap;gap:6px 18px">
+      <span class="sub" style="font-weight:600">People</span>
+      {{range .Actors}}<span class="sub"><code>{{.Handle}}</code> = {{if .Name}}{{.Name}}{{else}}{{.Email}}{{end}}</span>{{end}}
+    </div>
+    {{end}}
+  </div>
+
+  {{template "footer"}}
+</div>
+<script>
+// On the grant-approval forms, hide the "days" field when "permanent" is checked —
+// a permanent grant has no expiry, so a day count would be contradictory.
+(function () {
+  document.querySelectorAll('form[action="/grant/decide"]').forEach(function (f) {
+    var perm = f.querySelector('input[name="permanent"]');
+    var days = f.querySelector('input[name="days"]');
+    if (!perm || !days) return;
+    var tag = document.createElement('span');
+    tag.className = 'sub';
+    tag.textContent = 'no expiry';
+    tag.style.display = 'none';
+    days.parentNode.insertBefore(tag, days.nextSibling);
+    function sync() {
+      var on = perm.checked;
+      days.style.display = on ? 'none' : '';
+      days.disabled = on;
+      tag.style.display = on ? '' : 'none';
+    }
+    perm.addEventListener('change', sync);
+    sync();
+  });
+})();
+</script>
+</body>
+</html>{{end}}

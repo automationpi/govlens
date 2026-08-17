@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Azure GovLens — Admin · Approvers</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"><style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --ink:#1b1f24; --muted:#5b6470; --line:#e4e7eb;
+    --good:#1a7f4b; --good-bg:#e7f5ee; --bad:#c0392b; --bad-bg:#fbeae7;
+    --warn:#b7791f; --accent:#2d6cdf; --accent2:#1a7f4b;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0f1216; --card:#171b21; --ink:#e8ebef; --muted:#98a2b0; --line:#252b33;
+      --good:#4ade80; --good-bg:#123321; --bad:#f87171; --bad-bg:#3a1a1a;
+      --warn:#e3b341; --accent:#5b9dff; --accent2:#4ade80;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0f1216; --card:#171b21; --ink:#e8ebef; --muted:#98a2b0; --line:#252b33;
+    --good:#4ade80; --good-bg:#123321; --bad:#f87171; --bad-bg:#3a1a1a;
+    --warn:#e3b341; --accent:#5b9dff; --accent2:#4ade80;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  .wrap{max-width:1000px;margin:0 auto;padding:28px 20px 60px}
+  header{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:22px}
+  h1{font-size:22px;margin:0;letter-spacing:-.2px}
+  h1 .lens{color:var(--accent)}
+  a.h1link{text-decoration:none;color:inherit}
+  .sub{color:var(--muted);font-size:13px}
+  h2{font-size:14px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:30px 0 12px}
+  .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  @media(max-width:720px){.tiles{grid-template-columns:repeat(2,1fr)}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .tile .k{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+  .tile .v{font-size:28px;font-weight:650;margin-top:4px;letter-spacing:-.5px}
+  .delta{font-size:12px;margin-top:2px}
+  .up{color:var(--good)} .down{color:var(--bad)} .flat{color:var(--muted)}
+  .chart{overflow-x:auto}
+  svg{display:block;width:100%;height:auto;min-width:640px}
+  .legend{display:flex;gap:18px;font-size:12px;color:var(--muted);margin:6px 2px 0}
+  .swatch{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle}
+  .tablewrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.5px}
+  .badge{display:inline-block;padding:1px 8px;border-radius:20px;font-size:11.5px;font-weight:600}
+  .b-added{background:var(--good-bg);color:var(--good)}
+  .b-removed{background:var(--bad-bg);color:var(--bad)}
+  .b-changed{background:#f0e9d8;color:var(--warn)}
+  .b-user{background:var(--good-bg);color:var(--good)}
+  .b-group{background:#e7edfb;color:var(--accent)}
+  .b-sp{background:#f0e9d8;color:var(--warn)}
+  .sev{font-weight:600}
+  .sev-High{color:var(--bad)} .sev-Medium{color:var(--warn)} .sev-Low,.sev-Info{color:var(--muted)}
+  .dom{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+  .empty{color:var(--muted);padding:14px 2px}
+  .warn-banner{background:var(--bad-bg);color:var(--bad);border:1px solid var(--bad);
+    border-radius:8px;padding:8px 10px;font-size:12.5px;margin-bottom:10px;font-weight:500}
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:720px){.split{grid-template-columns:1fr}}
+  .mono{font-variant-numeric:tabular-nums}
+  .tsel{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:8px;
+    padding:3px 8px;font-size:13px;font-weight:650;cursor:pointer}
+  a.rowlink{color:var(--accent);text-decoration:none;font-weight:600}
+  a.rowlink:hover{text-decoration:underline}
+  .b-src{background:var(--line);color:var(--muted);margin-right:4px}
+  .back{color:var(--accent);text-decoration:none;font-size:13px;font-weight:600}
+  .back:hover{text-decoration:underline}
+  code.scope{font-size:12px;color:var(--muted);word-break:break-all}
+  .filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+  .finput{flex:1;min-width:180px;background:var(--card);color:var(--ink);border:1px solid var(--line);
+    border-radius:8px;padding:5px 10px;font-size:13px}
+  .fbtn{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:5px 12px;font-size:13px;
+    font-weight:600;cursor:pointer}
+  .finput:focus,.fbtn:focus,.tsel:focus{outline:2px solid var(--accent);outline-offset:1px}
+  .markbtn{background:transparent;color:var(--accent);border:1px solid var(--line);border-radius:6px;
+    padding:2px 9px;font-size:11.5px;font-weight:600;cursor:pointer}
+  .markbtn:hover{border-color:var(--accent)}
+  .revokebtn{background:transparent;color:var(--bad);border:1px solid var(--line);border-radius:6px;
+    padding:2px 9px;font-size:11.5px;font-weight:600;cursor:pointer;white-space:nowrap}
+  .revokebtn:hover{border-color:var(--bad);background:var(--bad-bg)}
+  .breject{background:var(--bad)}
+  .decide{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .safebanner{background:var(--good-bg);color:var(--good);border:1px solid var(--good);
+    border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:18px;font-weight:500}
+  .b-pending{background:#f0e9d8;color:var(--warn)}
+  .b-approved{background:var(--good-bg);color:var(--good)}
+  .b-rejected{background:var(--bad-bg);color:var(--bad)}
+   
+  .timeline{display:flex;flex-wrap:wrap;align-items:flex-start;min-width:360px}
+  .tl-step{position:relative;flex:1 1 0;min-width:118px;padding-right:2px}
+  .tl-line{display:flex;align-items:center;gap:6px;height:13px}
+  .tl-dot{width:11px;height:11px;border-radius:50%;flex:0 0 auto;box-sizing:border-box;
+    border:2px solid var(--line);background:var(--card);z-index:1}
+  .tl-bar{flex:1;height:2px;background:var(--line);border-radius:2px}
+  .tl-step:last-child .tl-bar{visibility:hidden}
+  .tl-body{margin-top:6px;padding-right:8px}
+  .tl-label{font-size:12px;font-weight:600;color:var(--ink);line-height:1.2}
+  .tl-meta{font-size:11px;color:var(--muted);line-height:1.4;margin-top:2px}
+  .tl-meta strong{color:var(--ink);font-weight:600}
+   
+  .tl-done .tl-dot{background:var(--good);border-color:var(--good)}
+  .tl-done .tl-bar{background:var(--good)}
+  .tl-current .tl-dot{background:var(--accent);border-color:var(--accent);
+    box-shadow:0 0 0 3px var(--good-bg);animation:tlpulse 1.8s ease-in-out infinite}
+  .tl-current .tl-label{color:var(--accent)}
+  .tl-pending .tl-label{color:var(--muted)}
+  .tl-rejected .tl-dot,.tl-failed .tl-dot{background:var(--bad);border-color:var(--bad)}
+  .tl-rejected .tl-label,.tl-failed .tl-label{color:var(--bad)}
+  .tl-skipped .tl-dot{background:var(--warn);border-color:var(--warn)}
+  .tl-skipped .tl-label{color:var(--warn)}
+  @keyframes tlpulse{0%,100%{box-shadow:0 0 0 2px var(--good-bg)}50%{box-shadow:0 0 0 5px var(--good-bg)}}
+  @media (prefers-reduced-motion:reduce){.tl-current .tl-dot{animation:none}}
+   
+  .wizbar{height:5px;background:var(--line);border-radius:5px;margin-bottom:8px;overflow:hidden}
+  .wizbar>span{display:block;height:100%;width:25%;background:var(--accent);transition:width .25s}
+  .wiztitle{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:600;margin-bottom:18px}
+  .wiztitle b{color:var(--ink)}
+  .wiz .wizstep{display:none}
+  .wiz .wizstep.cur{display:block}
+  .wiznav{display:flex;gap:10px;margin-top:22px;align-items:center}
+  .wizspacer{flex:1}
+  .reqstep{margin:0 0 20px}
+  .reqstep>.lbl{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px;font-weight:600}
+  .reqstep>.lbl .n{color:var(--accent);margin-right:6px}
+  .levels{display:flex;flex-wrap:wrap;gap:10px}
+  .level{position:relative;flex:1;min-width:190px;border:1px solid var(--line);border-radius:10px;
+    padding:12px 14px;cursor:pointer;background:var(--card);transition:border-color .12s,box-shadow .12s}
+  .level:hover{border-color:var(--accent)}
+  .level input{position:absolute;opacity:0;pointer-events:none}
+  .level.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+  .level .lname{font-weight:700;font-size:14px}
+  .level .lblurb{font-size:12px;color:var(--muted);margin-top:3px;line-height:1.35}
+  .leveldetail{margin-top:12px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .chip-choice{border:1px solid var(--line);border-radius:20px;padding:5px 14px;font-size:13px;
+    cursor:pointer;background:var(--card);color:var(--ink);user-select:none}
+  .chip-choice.sel{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .policyline{font-size:12.5px;color:var(--muted);margin-top:8px}
+  .policyline strong{color:var(--ink);font-weight:600}
+  .jhint{font-size:12px;color:var(--muted);margin-top:6px}
+  .jhint.ok{color:var(--good)}
+  .ta{width:100%;box-sizing:border-box;background:var(--card);color:var(--ink);border:1px solid var(--line);
+    border-radius:8px;padding:8px 10px;font:inherit;min-height:56px;resize:vertical}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);
+    background:var(--card);border:1px solid var(--line);border-radius:20px;padding:3px 10px}
+  .rolebadge{background:var(--line);color:var(--ink);border-radius:10px;padding:0 6px;font-size:11px;font-weight:600}
+  .topnav{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;font-size:12.5px}
+  .topbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;
+    padding-bottom:12px;margin-bottom:18px;border-bottom:1px solid var(--line)}
+  .brand{font-size:19px;font-weight:700;letter-spacing:-.3px;text-decoration:none;color:var(--ink);white-space:nowrap}
+  .brand .lens{color:var(--accent)}
+  .xbtn{background:transparent;border:0;color:var(--muted);cursor:pointer;font-size:13px;line-height:1;padding:0 1px;font-weight:700}
+  .xbtn:hover{color:var(--bad)}
+  .topnav a{color:var(--accent);text-decoration:none;font-weight:600}
+  .topnav a:hover{text-decoration:underline}
+  .topnav .sep{color:var(--line)}
+  .foot{margin-top:48px;padding-top:16px;border-top:1px solid var(--line);display:flex;
+    justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;color:var(--muted);font-size:12px}
+  .foot .lens{color:var(--accent)}
+  .foot strong{color:var(--ink);font-weight:650}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar"><a class="brand" href="/">Azure Gov<span class="lens">Lens</span></a><div class="topnav"><span class="chip" title="alex@example.com">Alex Morgan <span class="rolebadge">admin</span> <span class="rolebadge">approver</span></span><span class="sep">·</span><a href="/request">Request access</a><span class="sep">·</span><a href="/requests">Requests</a><span class="sep">·</span><a href="/admin">Admin</a><span class="sep">·</span><a href="/auth/logout">Sign out</a></div></div>
+  <header>
+    <div>
+      <div class="sub"><a class="back" href="/">← dashboard</a> · Admin — users &amp; approvers</div>
+    </div>
+  </header>
+
+  
+
+  
+
+  <h2>Grant a role</h2>
+  <div class="card">
+    <form method="post" action="/admin/grant" class="filters">
+      <input type="email" name="email" class="finput" placeholder="user@tenant.com" required>
+      <select name="role" class="tsel">
+        <option value="approver">approver</option>
+        <option value="admin">admin</option>
+      </select>
+      <select name="scope" class="tsel" aria-label="Scope">
+        <option value="*">Global — all subscriptions</option>
+        <option value="sub-prod">Production</option><option value="sub-test">Test</option>
+      </select>
+      <button class="fbtn" type="submit">Grant</button>
+    </form>
+    <div class="sub" style="margin-top:8px">
+      <strong>Global</strong> grants apply tenant-wide; a <strong>subscription</strong> grant scopes the role to that
+      subscription only — so a team's <strong>approver</strong> can only approve revocations for their own subscription,
+      and a subscription <strong>admin</strong> can add approvers for it. Any signed-in user can view and request.
+      Bootstrap global admins come from <code>GOVLENS_ADMIN_EMAILS</code>.
+    </div>
+  </div>
+
+  <h2>Users <span class="sub">2</span></h2>
+  <div class="card">
+    
+    <div class="tablewrap"><table>
+      <thead><tr><th>Email</th><th>Name</th><th>Grants (scope · role)</th></tr></thead>
+      <tbody>
+      
+        
+        <tr>
+          <td>alex@example.com</td>
+          <td class="sub">Alex Morgan</td>
+          <td>
+            
+              <span class="rolebadge" style="margin:0 4px 4px 0;display:inline-flex;align-items:center;gap:4px">
+                global · admin
+                <form method="post" action="/admin/revoke" style="display:inline">
+                  <input type="hidden" name="email" value="alex@example.com"><input type="hidden" name="scope" value="*"><input type="hidden" name="role" value="admin">
+                  <button class="xbtn" type="submit" title="remove">×</button></form>
+              </span>
+            
+          </td>
+        </tr>
+      
+        
+        <tr>
+          <td>sam@example.com</td>
+          <td class="sub">Sam Chen</td>
+          <td>
+            
+              <span class="rolebadge" style="margin:0 4px 4px 0;display:inline-flex;align-items:center;gap:4px">
+                sub sub-prod… · approver
+                <form method="post" action="/admin/revoke" style="display:inline">
+                  <input type="hidden" name="email" value="sam@example.com"><input type="hidden" name="scope" value="sub-prod"><input type="hidden" name="role" value="approver">
+                  <button class="xbtn" type="submit" title="remove">×</button></form>
+              </span>
+            
+          </td>
+        </tr>
+      
+      </tbody>
+    </table></div>
+    
+  </div>
+
+  <h2>Non-revocable roles <span class="sub">2</span></h2>
+  <div class="card">
+    <form method="post" action="/admin/protect" class="filters">
+      <input type="text" name="role" class="finput" placeholder="exact role name, e.g. Owner or User Access Administrator" required>
+      <button class="fbtn" type="submit">Protect</button>
+    </form>
+    <div class="sub" style="margin-top:8px">
+      A role listed here can never be revoked through this tool: the <strong>Revoke</strong> button is hidden on run pages,
+      the mark endpoint refuses it, and the worker skips it. (Match the role name exactly as it appears in the tables.)
+    </div>
+    
+    <div class="tablewrap" style="margin-top:12px"><table>
+      <thead><tr><th>Role</th><th>Added by</th><th></th></tr></thead>
+      <tbody>
+      
+        <tr>
+          <td>🔒 Global Administrator</td>
+          <td class="sub">system</td>
+          <td>
+            <span class="sub">default</span>
+          </td>
+        </tr>
+      
+        <tr>
+          <td>🔒 User Access Administrator</td>
+          <td class="sub">alex@example.com</td>
+          <td>
+            
+            <form method="post" action="/admin/unprotect" style="display:inline">
+              <input type="hidden" name="role" value="User Access Administrator">
+              <button class="markbtn" type="submit">remove</button>
+            </form>
+            
+          </td>
+        </tr>
+      
+      </tbody>
+    </table></div>
+    
+  </div>
+
+  
+  <h2>Principal-type policy <span class="sub">who can be revoked, by identity type</span></h2>
+  <div class="card">
+    <div class="tablewrap"><table>
+      <thead><tr><th>Principal type</th><th>Revocation policy</th></tr></thead>
+      <tbody>
+      
+        
+        <tr>
+          <td>User</td>
+          <td>
+            <form method="post" action="/admin/typepolicy" class="decide">
+              <input type="hidden" name="type" value="User">
+              <select name="policy" class="tsel">
+                <option value="allow" selected>allow — normal review</option>
+                <option value="global" >require global-admin approval</option>
+                <option value="blocked" >blocked — never revocable</option>
+              </select>
+              <button class="fbtn" type="submit">Save</button>
+            </form>
+          </td>
+        </tr>
+      
+        
+        <tr>
+          <td>Group</td>
+          <td>
+            <form method="post" action="/admin/typepolicy" class="decide">
+              <input type="hidden" name="type" value="Group">
+              <select name="policy" class="tsel">
+                <option value="allow" >allow — normal review</option>
+                <option value="global" selected>require global-admin approval</option>
+                <option value="blocked" >blocked — never revocable</option>
+              </select>
+              <button class="fbtn" type="submit">Save</button>
+            </form>
+          </td>
+        </tr>
+      
+        
+        <tr>
+          <td>ServicePrincipal</td>
+          <td>
+            <form method="post" action="/admin/typepolicy" class="decide">
+              <input type="hidden" name="type" value="ServicePrincipal">
+              <select name="policy" class="tsel">
+                <option value="allow" >allow — normal review</option>
+                <option value="global" >require global-admin approval</option>
+                <option value="blocked" selected>blocked — never revocable</option>
+              </select>
+              <button class="fbtn" type="submit">Save</button>
+            </form>
+          </td>
+        </tr>
+      
+      </tbody>
+    </table></div>
+    <div class="sub" style="margin-top:8px">
+      <strong>blocked</strong> hides Revoke for that type and the worker skips it (e.g. disable deleting Groups or
+      Service Principals). <strong>require global-admin approval</strong> still lets anyone request, but only a
+      <em>global</em> approver — not a subscription-scoped one — may approve it (e.g. Group deletions need top-level sign-off).
+    </div>
+  </div>
+  
+
+  
+  <h2 id="ssar">Self-service access requests <span class="sub">module · <span style="color:var(--good)">live</span></span></h2>
+  <div class="card">
+    <div class="sub" style="margin-bottom:12px">
+      Opt-in module that lets users <strong>request</strong> new access through the same approval flow, with a
+      write-capable worker provisioning time-bound grants. Off by default; goes live only when every gate below is green
+      (<a class="back" href="#" onclick="return false">fail-closed</a>). See <code>docs/SELF-SERVICE-GRANT.md</code>.
+    </div>
+
+    
+    <div class="tablewrap"><table>
+      <thead><tr><th>#</th><th>Gate</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td class="sub">1</td><td>Capability turned on</td>
+          <td><span style="color:var(--good)">✔ live</span></td></tr>
+        <tr><td class="sub">2</td><td>Grant service principal verified <span class="sub">(24h probe)</span></td>
+          <td><span style="color:var(--good)">✔ verified</span></td></tr>
+        <tr><td class="sub">3</td><td>Tier policy acknowledged</td>
+          <td><span style="color:var(--good)">✔ acknowledged</span></td></tr>
+        <tr><td class="sub">4</td><td>Catalog has requestable roles</td>
+          <td><span style="color:var(--good)">✔ 882 requestable</span></td></tr>
+        <tr><td class="sub">5</td><td>At least one subscription opted in</td>
+          <td><span style="color:var(--good)">✔ 2 opted in</span></td></tr>
+        <tr><td class="sub">6</td><td><strong>Module live</strong></td>
+          <td><span style="color:var(--good)">✔ intake open</span></td></tr>
+      </tbody>
+    </table></div>
+
+    
+    <div class="filters" style="margin-top:14px">
+      <form method="post" action="/admin/module" style="display:inline">
+        <input type="hidden" name="state" value="configuring">
+        <button class="markbtn" type="submit" disabled>Start configuring</button>
+      </form>
+      <form method="post" action="/admin/module" style="display:inline">
+        <input type="hidden" name="state" value="live">
+        <button class="fbtn" type="submit">Go live</button>
+      </form>
+      <form method="post" action="/admin/module" style="display:inline">
+        <input type="hidden" name="state" value="disabled">
+        <button class="revokebtn" type="submit">Disable (stop intake)</button>
+      </form>
+    </div>
+    <div class="sub" style="margin-top:6px">Disabling stops new requests only — it never revokes existing grants; time-bound access still expires on schedule.</div>
+  </div>
+
+  <h3 class="sub" style="margin:18px 0 8px">Grant service principal</h3>
+  <div class="card">
+    <div class="sub" style="margin-bottom:10px">
+      The <strong>only</strong> identity that can create assignments — separate from the read-only collector and the revoke
+      worker. Enter its <strong>non-secret</strong> identity; the credential itself lives in an env var / secret named by the
+      reference below and is never stored here.
+    </div>
+    <form method="post" action="/admin/grantsp" class="filters" style="flex-wrap:wrap;gap:8px">
+      <input type="text" name="app_id" class="finput" placeholder="grant SP app (client) id" value="grant-app-id" required>
+      <input type="text" name="sp_tenant_id" class="finput" placeholder="SP tenant id" value="example-tenant" required>
+      <input type="text" name="cred_ref" class="finput" placeholder="credential ref (env/secret name)" value="GRANT_SP_CERT" required>
+      <input type="text" name="root_scope" class="finput" placeholder="root scope the SP may write within" value="/providers/Microsoft.Management/managementGroups/example" required>
+      <button class="fbtn" type="submit">Save SP</button>
+    </form>
+    
+    <div class="filters" style="margin-top:10px;align-items:center">
+      <form method="post" action="/admin/grantsp/probe" style="display:inline">
+        <button class="markbtn" type="submit">Run readiness probe</button>
+      </form>
+      <span class="sub"><span style="color:var(--good)">✔ verified</span> · by alex@example.com · verified: can write role assignments at MG root, not over-permissioned</span>
+    </div>
+    
+  </div>
+
+  <h3 class="sub" style="margin:18px 0 8px">Tier policy <span class="sub">the knobs every role inherits by tier</span></h3>
+  <div class="card">
+    
+    <form method="post" action="/admin/tierpolicy" class="filters" style="flex-wrap:wrap;gap:10px 14px;align-items:center;margin-bottom:6px">
+      <input type="hidden" name="tier" value="low">
+      <strong style="min-width:80px">low</strong>
+      <label class="sub"><input type="checkbox" name="self_service" checked> self-service</label>
+      <label class="sub">default <input type="number" name="default_days" min="0" value="90" class="finput" style="max-width:70px"> days</label>
+      <label class="sub">max <input type="number" name="max_days" min="0" value="0" class="finput" style="max-width:70px"> (0=∞)</label>
+      <label class="sub"><input type="checkbox" name="allow_permanent" checked> allow permanent</label>
+      <label class="sub">approver
+        <select name="approver_tier" class="tsel">
+          <option value="scoped" selected>scoped</option>
+          <option value="global" >global</option>
+        </select></label>
+      
+      <button class="fbtn" type="submit">Save</button>
+    </form>
+    
+    <form method="post" action="/admin/tierpolicy" class="filters" style="flex-wrap:wrap;gap:10px 14px;align-items:center;margin-bottom:6px">
+      <input type="hidden" name="tier" value="medium">
+      <strong style="min-width:80px">medium</strong>
+      <label class="sub"><input type="checkbox" name="self_service" checked> self-service</label>
+      <label class="sub">default <input type="number" name="default_days" min="0" value="30" class="finput" style="max-width:70px"> days</label>
+      <label class="sub">max <input type="number" name="max_days" min="0" value="90" class="finput" style="max-width:70px"> (0=∞)</label>
+      <label class="sub"><input type="checkbox" name="allow_permanent" > allow permanent</label>
+      <label class="sub">approver
+        <select name="approver_tier" class="tsel">
+          <option value="scoped" selected>scoped</option>
+          <option value="global" >global</option>
+        </select></label>
+      
+      <button class="fbtn" type="submit">Save</button>
+    </form>
+    
+    <form method="post" action="/admin/tierpolicy" class="filters" style="flex-wrap:wrap;gap:10px 14px;align-items:center;margin-bottom:6px">
+      <input type="hidden" name="tier" value="privileged">
+      <strong style="min-width:80px">privileged</strong>
+      <label class="sub"><input type="checkbox" name="self_service" > self-service</label>
+      <label class="sub">default <input type="number" name="default_days" min="0" value="7" class="finput" style="max-width:70px"> days</label>
+      <label class="sub">max <input type="number" name="max_days" min="0" value="7" class="finput" style="max-width:70px"> (0=∞)</label>
+      <label class="sub"><input type="checkbox" name="allow_permanent" > allow permanent</label>
+      <label class="sub">approver
+        <select name="approver_tier" class="tsel">
+          <option value="scoped" >scoped</option>
+          <option value="global" selected>global</option>
+        </select></label>
+      
+      <button class="fbtn" type="submit">Save</button>
+    </form>
+    
+    <div class="sub" style="margin-top:8px">Roles are auto-classified into these tiers by their permissions (privileged = anything that can grant access). Anything unclassifiable defaults to <strong>privileged</strong> (hidden) — fail-closed.</div>
+  </div>
+
+  <h3 class="sub" style="margin:18px 0 8px">Subscription opt-in</h3>
+  <div class="card">
+    
+    <div class="tablewrap"><table>
+      <thead><tr><th>Subscription</th><th>Self-service enabled</th></tr></thead>
+      <tbody>
+      
+        
+        <tr>
+          <td>Production<div class="sub"><code class="scope">sub-prod</code></div></td>
+          <td>
+            
+            <form method="post" action="/admin/scopeoptin" class="decide">
+              <input type="hidden" name="scope" value="sub-prod">
+              <input type="hidden" name="enabled" value="off">
+              <span style="color:var(--good)">✔ enabled</span> <button class="markbtn" type="submit">disable</button>
+              
+            </form>
+            
+          </td>
+        </tr>
+      
+        
+        <tr>
+          <td>Test<div class="sub"><code class="scope">sub-test</code></div></td>
+          <td>
+            
+            <form method="post" action="/admin/scopeoptin" class="decide">
+              <input type="hidden" name="scope" value="sub-test">
+              <input type="hidden" name="enabled" value="off">
+              <span style="color:var(--good)">✔ enabled</span> <button class="markbtn" type="submit">disable</button>
+              
+            </form>
+            
+          </td>
+        </tr>
+      
+      </tbody>
+    </table></div>
+    
+    <div class="sub" style="margin-top:8px">A global admin turns the capability on tenant-wide; each subscription admin opts their own subscription in — so you can offer self-service for Test without exposing Production.</div>
+  </div>
+  
+
+  <footer class="foot"><div>Azure Gov<span class="lens">Lens</span> · <strong>Azure &amp; Entra governance</strong></div><div>read-only collection · reviewed remediation</div></footer>
+</div>
+</body>
+</html>

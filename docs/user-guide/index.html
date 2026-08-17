@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GovLens - User Guide</title>
+<link rel="stylesheet" href="assets/guide.css">
+</head>
+<body>
+<div class="topbar">
+  <span class="brand">Gov<span class="lens">Lens</span></span>
+  <nav class="gnav"><a href="index.html" class="active">User Guide</a><a href="operator.html">Operator Guide</a></nav>
+  <span style="flex:1"></span>
+  <span class="tag">Azure &amp; Entra governance</span>
+</div>
+
+<div class="layout">
+<nav class="toc">
+  <h4>Getting started</h4>
+  <a href="#overview">What is GovLens</a>
+  <a href="#concepts">Key concepts</a>
+  <a href="#signin">Signing in</a>
+  <h4>Using GovLens</h4>
+  <a href="#dashboard">The dashboard</a>
+  <a href="#request">Requesting access</a>
+  <a href="#requests">The Requests hub</a>
+  <a href="#approve">Reviewing &amp; approving</a>
+  <a href="#revoke">Revoking access</a>
+  <h4>Administration</h4>
+  <a href="#admin">Admin overview</a>
+  <a href="#enable">Enabling self-service</a>
+  <a href="#tiers">Levels &amp; tier policy</a>
+  <a href="#guardrails">Guardrails</a>
+  <h4>Reference</h4>
+  <a href="#behind">How it works</a>
+  <a href="#security">Security model</a>
+  <a href="#deploy">Deployment</a>
+  <a href="#faq">FAQ</a>
+</nav>
+
+<main>
+  <h1>GovLens User Guide</h1>
+  <p class="lead">Continuous Azure &amp; Entra governance visibility, plus a reviewed self-service
+  access workflow - grant and revoke Azure roles safely, with least-privilege and an audit trail.</p>
+  <div class="note">Screenshots in this guide use <b>example data</b> (Example Org, example.com users).
+  Your deployment shows your own tenant.</div>
+
+  <h2 id="overview">What is GovLens</h2>
+  <p>GovLens does two jobs for a Microsoft cloud tenant:</p>
+  <ul>
+    <li><b>Governance visibility</b> - a read-only collector regularly pulls your Azure Policy
+    compliance, RBAC role assignments, Entra Conditional Access, and directory-role assignments,
+    and shows them on a dashboard with trends and drift.</li>
+    <li><b>Reviewed access lifecycle</b> - users <b>request</b> access through a guided wizard;
+    approvers review and set an expiry; a separate worker <b>provisions</b> the grant and
+    <b>auto-revokes</b> it when it expires. Revoking existing access follows the same review flow.</li>
+  </ul>
+  <p>It's designed to be the cheapest, leanest governance option for small-to-mid orgs: one container,
+  your own database, three least-privilege service principals.</p>
+
+  <h2 id="concepts">Key concepts</h2>
+  <table>
+    <tr><th>Term</th><th>What it means</th></tr>
+    <tr><td><b>Run</b></td><td>One collection snapshot. Comparing consecutive runs produces <i>drift</i>.</td></tr>
+    <tr><td><b>Roles in GovLens</b></td><td><span class="pill p-user">user</span> anyone signed in - can view and request.
+      <span class="pill p-approver">approver</span> can approve/reject requests for their scope.
+      <span class="pill p-admin">admin</span> can configure the tool and manage approvers.</td></tr>
+    <tr><td><b>Scope</b></td><td>Where a grant/role applies: tenant-wide (<code>*</code>), a subscription, or a resource group.</td></tr>
+    <tr><td><b>Modules</b></td><td>The background workers: <b>collector</b> (read), <b>remediator</b> (executes revokes),
+      <b>grant</b> (provisions self-service grants). Each is independently toggleable.</td></tr>
+    <tr><td><b>Level</b></td><td>User-facing access size - <b>Read-only</b>, <b>Contribute</b>, <b>Admin</b> - mapped to a
+      risk tier that governs duration limits and who approves.</td></tr>
+  </table>
+
+  <h2 id="signin">Signing in</h2>
+  <p>GovLens uses your organization's identity provider (Entra ID single sign-on by default). Click
+  through the Microsoft sign-in; GovLens reads your name, email, and directory object id from the token.
+  Your in-app roles (user / approver / admin) are resolved from GovLens's own grants - bootstrap admins
+  come from the deployment config.</p>
+  <div class="tip"><b>Tip:</b> the first time you sign in after self-service is enabled, sign out and back
+  in once so your directory object id is captured - it's the target of any grant you request for yourself.</div>
+
+  <h2 id="dashboard">The dashboard</h2>
+  <p>The landing page summarizes tenant governance at a glance: Policy compliance %, Maester pass rate,
+  Conditional Access coverage, and total RBAC assignments - each with the change since the previous run.
+  Below, a <b>compliance trend</b> chart, a <b>drift</b> panel (what access was added/removed between the two
+  most recent runs, with false-removals suppressed when a collector didn't run), and the list of failing
+  controls. Use the tenant selector to switch directories.</p>
+  <div class="shot">
+    <div class="chrome"><span class="dot" style="background:#f6584f"></span><span class="dot" style="background:#f6be3f"></span>
+      <span class="dot" style="background:#2fbe57"></span><span class="url">https://govlens.example.com/</span></div>
+    <iframe src="screens/dashboard.html" style="height:640px" title="Dashboard" loading="lazy"></iframe>
+    <div class="cap"><b>Dashboard</b> - headline metrics, compliance trend, drift, and failing controls.</div>
+  </div>
+
+  <h2 id="request">Requesting access</h2>
+  <p>Any signed-in user can request access from <b>Request access</b>. It's a four-step wizard that hides
+  Azure's hundreds of raw roles behind plain choices:</p>
+  <ol class="steps">
+    <li><b>Where</b> - pick a subscription, and optionally narrow to a single resource group for tighter,
+    least-privilege access.</li>
+    <li><b>How much access</b> - choose a level: <b>Read-only</b>, <b>Contribute</b>, or <b>Admin</b>. Each shows a
+    sensible default role (you can pick a different one from that level), plus the policy: who approves and
+    the maximum duration.</li>
+    <li><b>For how long</b> - a duration preset (1 / 7 / 30 days or custom). Where policy allows, an
+    <b>∞ Unlimited</b> option appears for a no-expiry grant.</li>
+    <li><b>Why you need it</b> - a short justification (required). Your request then goes to an approver.</li>
+  </ol>
+  <div class="shot">
+    <div class="chrome"><span class="dot" style="background:#f6584f"></span><span class="dot" style="background:#f6be3f"></span>
+      <span class="dot" style="background:#2fbe57"></span><span class="url">https://govlens.example.com/request</span></div>
+    <iframe src="screens/request.html" style="height:600px" title="Request access wizard" loading="lazy"></iframe>
+    <div class="cap"><b>Request access</b> - the guided wizard (step 1 shown; use Next → to advance).</div>
+  </div>
+  <div class="note">Grants are <b>time-bound by default</b> and provisioned to <b>you</b> (your directory object id).
+  The role appears in Azure automatically once approved, and is revoked automatically when it expires.</div>
+
+  <h2 id="requests">The Requests hub</h2>
+  <p><b>Requests</b> is the shared hub for both grant and revoke workflows. It has three parts:</p>
+  <ul>
+    <li><b>Access requests - grants</b>: pending grant requests awaiting review.</li>
+    <li><b>Revoke requests</b>: pending revocations awaiting review.</li>
+    <li><b>History</b>: every decided request (grants and revokes together, tagged by type) with a
+    step-by-step timeline, <b>search</b>, and <b>pagination</b> (20 per page).</li>
+  </ul>
+  <p><b>Who sees what</b> (visibility matrix): you always see your own requests; a
+  <span class="pill p-approver">global approver</span>/<span class="pill p-admin">admin</span> sees everything;
+  a subscription-scoped approver/admin sees requests for their subscription(s).</p>
+  <div class="shot">
+    <div class="chrome"><span class="dot" style="background:#f6584f"></span><span class="dot" style="background:#f6be3f"></span>
+      <span class="dot" style="background:#2fbe57"></span><span class="url">https://govlens.example.com/requests</span></div>
+    <iframe src="screens/requests.html" style="height:760px" title="Requests hub" loading="lazy"></iframe>
+    <div class="cap"><b>Requests</b> - pending grant/revoke queues and the searchable, paginated history with lifecycle timelines.</div>
+  </div>
+
+  <h2 id="approve">Reviewing &amp; approving</h2>
+  <p>On a pending <b>grant</b>, an approver sets the expiry (in days) or ticks <b>permanent</b> where the level's
+  policy allows it, adds an optional note, and clicks Approve (or Reject). The requester's proposed duration is
+  shown as a hint. On a pending <b>revoke</b>, the approver simply approves or rejects.</p>
+  <ul>
+    <li>Approval is <b>scope-aware</b>: you can only decide requests for scopes you approve.</li>
+    <li>Some levels require a <b>global approver</b> (set per tier). Those requests won't accept a subscription
+    approver's decision.</li>
+    <li>The lifecycle timeline records each step with who and when - <code>Requested → Approved → Granted → Expires</code>
+    for grants, and <code>Requested → Approved → Removed</code> for revokes.</li>
+  </ul>
+
+  <h2 id="revoke">Revoking access</h2>
+  <p>To remove existing access, open a run's detail page, find the role assignment, and click <b>Revoke</b> to mark
+  it. That opens a revoke request in the Requests hub (marking writes only to GovLens's queue - it changes nothing
+  in Azure yet). After an approver approves it, the <b>remediator</b> worker performs the deletion on its next
+  cycle and records the removal time. Protected roles and blocked principal types can't be marked at all.</p>
+  <div class="note">Marking, approval, and execution are <b>separated by design</b>: the web app never deletes
+  anything - a distinct worker with its own credential does, only for approved requests, behind a safety gate.</div>
+
+  <h2 id="admin">Administration</h2>
+  <p>Admins get an <b>Admin</b> page to manage people and policy. From here you grant approver/admin roles
+  (global or per-subscription), maintain the non-revocable role list, set per-principal-type revocation policy,
+  and configure the self-service grant module.</p>
+  <div class="shot">
+    <div class="chrome"><span class="dot" style="background:#f6584f"></span><span class="dot" style="background:#f6be3f"></span>
+      <span class="dot" style="background:#2fbe57"></span><span class="url">https://govlens.example.com/admin</span></div>
+    <iframe src="screens/admin.html" style="height:820px" title="Admin" loading="lazy"></iframe>
+    <div class="cap"><b>Admin</b> - users &amp; roles, self-service enablement gates, grant SP, tier policy, guardrails, subscription opt-in.</div>
+  </div>
+
+  <h3 id="enable">Enabling self-service (the gates)</h3>
+  <p>Self-service grant is <b>off by default</b> and only goes live when a fail-closed checklist is complete:</p>
+  <ol>
+    <li><b>Capability on</b> - a global admin turns the module on.</li>
+    <li><b>Grant SP verified</b> - configure the write-capable service principal and run the readiness probe
+    (confirms it can create role assignments and isn't over-permissioned).</li>
+    <li><b>Tier policy acknowledged</b> - review each level's rules.</li>
+    <li><b>Catalog</b> - requestable roles are auto-discovered on collection.</li>
+    <li><b>Subscription opt-in</b> - each subscription admin opts their subscription in.</li>
+    <li><b>Go live</b> - allowed only when every gate above is green.</li>
+  </ol>
+
+  <h3 id="tiers">Levels &amp; tier policy</h3>
+  <p>Roles are auto-classified by their permissions into three tiers, surfaced to users as levels:</p>
+  <table>
+    <tr><th>Level</th><th>Tier</th><th>Typical default</th><th>Governs</th></tr>
+    <tr><td><b>Read-only</b></td><td>low</td><td>Reader</td><td>self-service on, long/uncapped, subscription approver</td></tr>
+    <tr><td><b>Contribute</b></td><td>medium</td><td>data / resource roles</td><td>self-service on, capped duration (e.g. 90 days)</td></tr>
+    <tr><td><b>Admin</b></td><td>privileged</td><td>Owner, User Access Administrator…</td><td>hidden by default; global approver, short duration</td></tr>
+  </table>
+  <p>Each tier has four knobs an admin tunes: <b>self-service</b> (requestable?), <b>default</b> and <b>max</b> days,
+  <b>allow permanent</b>, and <b>approver</b> (scoped or global). Anything the classifier can't place lands in
+  <b>privileged</b> - fail-closed.</p>
+
+  <h3 id="guardrails">Guardrails</h3>
+  <ul>
+    <li><b>Non-revocable roles</b> - roles that can never be removed through GovLens (e.g. Global Administrator).</li>
+    <li><b>Principal-type policy</b> - per identity type (User / Group / Service Principal): <b>blocked</b>
+    (never revocable) or <b>global-approval-required</b>.</li>
+    <li><b>Least-privilege by construction</b> - narrower scopes (resource group over subscription) and shorter
+    durations are always available and encouraged.</li>
+  </ul>
+
+  <h2 id="behind">How it works</h2>
+  <p>Three background workers run against your database:</p>
+  <ul>
+    <li><b>Collector</b> - read-only SP → pulls governance data → stores a run.</li>
+    <li><b>Remediator</b> - a roles-only SP with <i>delete</i> → executes approved revokes (and the auto-revocation
+    of expired grants).</li>
+    <li><b>Grant worker</b> - a roles-only SP with <i>write</i> → provisions approved grants and sweeps expired ones.
+    It re-checks its own permissions each cycle to keep the readiness gate fresh.</li>
+  </ul>
+  <p>The web app only reads from and writes to the request queue; it never touches Azure directly. The queue
+  (the <code>access_requests</code> table) is also the audit trail.</p>
+
+  <h2 id="security">Security model</h2>
+  <ul>
+    <li><b>Three separated credentials</b> - read-only, delete-only, write-only - so no single component can both
+    read broadly and change access.</li>
+    <li><b>Cert or secret</b> - each service principal authenticates with a certificate or a client secret (your choice).</li>
+    <li><b>Fail-closed everywhere</b> - the grant module won't go live until every gate is green; unknown roles are
+    treated as privileged; a stale SP-verification closes the module.</li>
+    <li><b>Time-bound by default</b> - grants expire and are auto-revoked; "permanent" is a policy-gated exception.</li>
+    <li><b>Full audit trail</b> - every request records who asked, who approved, when it was provisioned, and when it
+    expired/was removed.</li>
+  </ul>
+
+  <h2 id="deploy">Deployment</h2>
+  <p>GovLens ships as a single container image driven by one YAML config, against your own Postgres:</p>
+  <pre style="background:var(--code);padding:14px;border-radius:8px;overflow:auto;font-size:13px">docker run -v ./config.yaml:/etc/govlens/config.yaml -p 8080:8080 ghcr.io/automationpi/govlens</pre>
+  <p>The config file holds the database connection string, authentication, the three service principals (each cert
+  or secret), and which modules run. Any value can use <code>${ENV_VAR}</code> so secrets stay in the environment.
+  See <code>config.example.yaml</code> and <code>docs/DEPLOY.md</code> for the full reference. The database is
+  yours - GovLens creates its own schema on first start and never manages a database.</p>
+
+  <h2 id="faq">FAQ</h2>
+  <h3>I requested access but nothing happened.</h3>
+  <p>Requests need approval. Check the Requests hub - your request is pending until an approver decides. After
+  approval, the grant worker provisions it on its next cycle (typically minutes).</p>
+  <h3>Why can't I request an "Admin" level?</h3>
+  <p>Privileged roles are hidden from self-service by default. An admin can enable them per tier - they then require
+  a global approver and a short duration.</p>
+  <h3>Will a grant last forever?</h3>
+  <p>No - grants are time-bound and auto-revoked at expiry. "Unlimited" only appears where an admin has allowed
+  permanent grants for that level, and still needs the designated approver.</p>
+  <h3>Can revoking break existing access I didn't request?</h3>
+  <p>No. The grant worker only ever <i>adds</i> access; the only automatic removal is the expiry of grants GovLens
+  itself created, by their exact assignment id. Revoking existing access always goes through mark → approve → worker.</p>
+</main>
+</div>
+
+<footer>
+  GovLens User Guide · Azure &amp; Entra governance and self-service access · Screenshots use example data.
+</footer>
+</body>
+</html>

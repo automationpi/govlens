@@ -1,0 +1,6 @@
+PolicyAssignmentName,PolicyDefinitionName,Category,Scope,ComplianceState,CompliantResources,NonCompliantResources
+Require HTTPS on storage,Secure transfer to storage accounts should be enabled,Storage,/subscriptions/sub-a,NonCompliant,120,40
+Audit VMs without managed disks,Audit VMs that do not use managed disks,Compute,/subscriptions/sub-a,NonCompliant,200,60
+Allowed locations,Allowed locations,General,/providers/Microsoft.Management/managementGroups/root,Compliant,300,0
+Require tag on resources,Require a tag on resources,Tags,/subscriptions/sub-b,NonCompliant,100,90
+Deny public IP on NICs,Network interfaces should not have public IPs,Network,/subscriptions/sub-b,NonCompliant,60,30

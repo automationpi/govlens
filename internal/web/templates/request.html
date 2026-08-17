@@ -1,0 +1,247 @@
+{{define "request.html"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Azure GovLens — Request access · {{.TenantDisplay}}</title>
+{{template "styles"}}
+</head>
+<body>
+<div class="wrap">
+  {{template "topbar" dict "User" .User "Tenant" .Tenant}}
+  <header>
+    <div><div class="sub"><a class="back" href="/?tenant={{.Tenant}}">← {{.TenantDisplay}}</a> · Request access</div></div>
+    <div class="sub" style="text-align:right">self-service</div>
+  </header>
+
+  {{if .Notice}}<div class="warn-banner">{{.Notice}}</div>{{end}}
+  {{if not .ModuleLive}}<div class="warn-banner">Self-service intake is <strong>closed</strong> right now. An administrator needs to bring the module live.</div>{{end}}
+  {{if not .HasOid}}<div class="warn-banner">Your directory object id isn't in this session yet — <a class="back" href="/auth/logout">sign out</a> and back in, then return here.</div>{{end}}
+
+  <h2>What do you need?</h2>
+  <div class="card">
+    {{if and .ModuleLive .HasOid .Levels .Scopes}}
+    <form method="post" action="/request/submit" id="reqform">
+      <input type="hidden" name="tenant" value="{{.Tenant}}">
+      <input type="hidden" name="permanent" id="permanent" value="">
+
+      <div class="wizbar" id="wizbar"><span></span></div>
+      <div class="wiztitle" id="wiztitle">Step 1 of 4 — <b>Where</b></div>
+
+      <!-- Step 1 — Where -->
+      <div class="wizstep" data-title="Where">
+        <div class="reqstep">
+          <div class="lbl"><span class="n">1</span>Where</div>
+          <div class="chips" style="gap:10px">
+            <select name="sub" id="sub" class="tsel" required style="min-width:220px">
+              {{range .Scopes}}<option value="{{.SubID}}">{{.Name}}</option>{{end}}
+            </select>
+            <select name="rg" id="rg" class="tsel" style="min-width:220px" title="resource group (optional)">
+              <option value="">— whole subscription —</option>
+            </select>
+          </div>
+          <div class="sub" style="margin-top:6px">Narrow to a resource group for tighter, least-privilege access (optional).</div>
+        </div>
+      </div>
+
+      <!-- Step 2 — How much access -->
+      <div class="wizstep" data-title="How much access">
+        <div class="reqstep">
+          <div class="lbl"><span class="n">2</span>How much access</div>
+          <div class="levels">
+            {{range $i, $lv := .Levels}}
+            <label class="level" data-target="lvl{{$i}}" data-max="{{$lv.MaxDays}}"
+                   data-default="{{$lv.DefaultDays}}" data-approver="{{$lv.ApproverTier}}"
+                   data-permanent="{{if $lv.AllowPermanent}}1{{else}}0{{end}}">
+              <input type="radio" name="level" value="{{$lv.Key}}" {{if eq $i 0}}checked{{end}}>
+              <div class="lname">{{$lv.Label}}</div>
+              <div class="lblurb">{{$lv.Blurb}}</div>
+            </label>
+            {{end}}
+          </div>
+          {{range $i, $lv := .Levels}}
+          <div class="leveldetail" id="lvl{{$i}}" {{if ne $i 0}}style="display:none"{{end}}>
+            <div class="reqstep" style="margin:12px 0 0">
+              <div class="lbl">Role</div>
+              <select name="role_def_id" class="tsel roleSel" data-lvl="{{$i}}" {{if ne $i 0}}disabled{{end}} style="min-width:280px">
+                {{range $lv.Roles}}<option value="{{.RoleDefID}}" {{if eq .RoleDefID $lv.DefaultRoleDefID}}selected{{end}}>{{.RoleName}}</option>{{end}}
+              </select>
+              <div class="policyline">
+                Approved by {{if eq $lv.ApproverTier "global"}}<strong>a global approver</strong>{{else}}<strong>the subscription's approver</strong>{{end}}
+                · up to <strong>{{if $lv.MaxDays}}{{$lv.MaxDays}} days{{else}}no limit{{end}}</strong>
+                {{if $lv.AllowPermanent}}· <strong>unlimited allowed</strong>{{end}} · auto-expires unless permanent.
+              </div>
+            </div>
+          </div>
+          {{end}}
+        </div>
+      </div>
+
+      <!-- Step 3 — For how long -->
+      <div class="wizstep" data-title="For how long">
+        <div class="reqstep">
+          <div class="lbl"><span class="n">3</span>For how long</div>
+          <div class="chips">
+            <span class="chip-choice" data-days="1">1 day</span>
+            <span class="chip-choice sel" data-days="7">7 days</span>
+            <span class="chip-choice" data-days="30">30 days</span>
+            <label class="sub" style="display:inline-flex;align-items:center;gap:6px;margin-left:4px">
+              custom <input type="number" name="days" id="days" min="1" value="7" class="finput" style="max-width:80px">
+            </label>
+            <span class="chip-choice" id="unlimchip" data-unlimited="1" hidden>∞ Unlimited</span>
+            <span class="sub" id="maxnote"></span>
+          </div>
+          <div class="sub" id="unlimnote" style="margin-top:8px" hidden></div>
+        </div>
+      </div>
+
+      <!-- Step 4 — Why -->
+      <div class="wizstep" data-title="Why you need it">
+        <div class="reqstep">
+          <div class="lbl"><span class="n">4</span>Why you need it</div>
+          <textarea name="reason" id="reason" class="ta" required
+            placeholder="What you're working on and why you need this access (e.g. 'debugging the eventgrid dead-letter blob — JIRA-1423')."></textarea>
+          <div class="jhint" id="jhint">Add a short justification (about a sentence).</div>
+        </div>
+      </div>
+
+      <div class="wiznav">
+        <button type="button" id="wizback" class="markbtn" hidden>← Back</button>
+        <div class="wizspacer"></div>
+        <button type="button" id="wiznext" class="fbtn" hidden>Next →</button>
+        <button type="submit" id="wizsubmit" class="fbtn" style="font-size:14px;padding:8px 18px">Request access</button>
+      </div>
+    </form>
+    {{else if not .Levels}}<div class="empty">No access levels are available for self-service yet.</div>
+    {{else if not .Scopes}}<div class="empty">No subscriptions are open for self-service requests yet.</div>
+    {{end}}
+  </div>
+
+  {{template "footer"}}
+</div>
+
+<script>
+(function () {
+  var form = document.getElementById('reqform');
+  if (!form) return;
+
+  // ---- resource-group picker ----
+  var RGS = {{.RGsJSON}};
+  var subSel = document.getElementById('sub');
+  var rgSel = document.getElementById('rg');
+  function populateRG() {
+    var list = (RGS && RGS[subSel.value]) || [];
+    rgSel.innerHTML = '<option value="">— whole subscription —</option>';
+    list.forEach(function (name) {
+      var o = document.createElement('option'); o.value = name; o.textContent = name; rgSel.appendChild(o);
+    });
+  }
+  subSel.addEventListener('change', populateRG);
+  populateRG();
+
+  // ---- duration + unlimited ----
+  var days = document.getElementById('days');
+  var maxnote = document.getElementById('maxnote');
+  var permanent = document.getElementById('permanent');
+  var unlimchip = document.getElementById('unlimchip');
+  var unlimnote = document.getElementById('unlimnote');
+  var chips = function () { return document.querySelectorAll('.chip-choice'); };
+
+  function clearChips() { chips().forEach(function (c) { c.classList.remove('sel'); }); }
+  function setPermanent(on) {
+    permanent.value = on ? 'on' : '';
+    days.disabled = on;
+    unlimnote.hidden = !on;
+  }
+  chips().forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      if (chip.hidden) return;
+      clearChips(); chip.classList.add('sel');
+      if (chip.getAttribute('data-unlimited')) { setPermanent(true); }
+      else { setPermanent(false); days.value = chip.getAttribute('data-days'); }
+    });
+  });
+  days.addEventListener('input', function () {
+    setPermanent(false);
+    chips().forEach(function (c) { c.classList.toggle('sel', c.getAttribute('data-days') === days.value); });
+  });
+
+  // ---- level selection ----
+  function selectLevel(label) {
+    document.querySelectorAll('.level').forEach(function (el) { el.classList.remove('sel'); });
+    label.classList.add('sel');
+    label.querySelector('input').checked = true;
+    var target = label.getAttribute('data-target');
+    document.querySelectorAll('.leveldetail').forEach(function (d) {
+      var on = d.id === target;
+      d.style.display = on ? '' : 'none';
+      var sel = d.querySelector('.roleSel'); if (sel) sel.disabled = !on;
+    });
+    var max = parseInt(label.getAttribute('data-max') || '0', 10);
+    if (max > 0) {
+      days.max = max;
+      if (parseInt(days.value, 10) > max) days.value = max;
+      maxnote.textContent = '(max ' + max + ' days for ' + label.querySelector('.lname').textContent + ')';
+    } else { days.removeAttribute('max'); maxnote.textContent = ''; }
+
+    // Unlimited only where this level's policy allows it.
+    var allowPerm = label.getAttribute('data-permanent') === '1';
+    var appr = label.getAttribute('data-approver') === 'global' ? 'a global approver' : "the subscription's approver";
+    unlimchip.hidden = !allowPerm;
+    unlimnote.textContent = 'No expiry — the grant stays until manually revoked. Only ' + appr + ' can approve this.';
+    if (!allowPerm && permanent.value === 'on') { // revert if it was selected
+      clearChips();
+      var d7 = document.querySelector('.chip-choice[data-days="7"]'); if (d7) d7.classList.add('sel');
+      days.value = '7'; setPermanent(false);
+    }
+  }
+  document.querySelectorAll('.level').forEach(function (label) {
+    label.addEventListener('click', function () { selectLevel(label); });
+  });
+
+  // ---- justification hint ----
+  var reason = document.getElementById('reason');
+  var jhint = document.getElementById('jhint');
+  function checkReason() {
+    var ok = reason.value.trim().length >= 10;
+    jhint.classList.toggle('ok', ok);
+    jhint.textContent = ok ? '✓ Looks good' : 'Add a short justification (about a sentence).';
+    return ok;
+  }
+  reason.addEventListener('input', checkReason);
+
+  // ---- wizard ----
+  var steps = Array.prototype.slice.call(form.querySelectorAll('.wizstep'));
+  var back = document.getElementById('wizback');
+  var next = document.getElementById('wiznext');
+  var submit = document.getElementById('wizsubmit');
+  var bar = document.querySelector('#wizbar>span');
+  var title = document.getElementById('wiztitle');
+  var cur = 0;
+  form.classList.add('wiz'); // enable wizard mode (no-JS shows all steps + submit)
+  next.hidden = false;
+
+  function show(i) {
+    cur = Math.max(0, Math.min(steps.length - 1, i));
+    steps.forEach(function (s, idx) { s.classList.toggle('cur', idx === cur); });
+    bar.style.width = ((cur + 1) / steps.length * 100) + '%';
+    title.innerHTML = 'Step ' + (cur + 1) + ' of ' + steps.length + ' — <b>' + steps[cur].getAttribute('data-title') + '</b>';
+    back.hidden = cur === 0;
+    var last = cur === steps.length - 1;
+    next.hidden = last;
+    submit.hidden = !last;
+    if (last) checkReason();
+  }
+  back.addEventListener('click', function () { show(cur - 1); });
+  next.addEventListener('click', function () { show(cur + 1); });
+  form.addEventListener('submit', function (e) {
+    if (!checkReason()) { e.preventDefault(); show(steps.length - 1); reason.focus(); }
+  });
+
+  // init
+  selectLevel(document.querySelector('.level'));
+  show(0);
+})();
+</script>
+</body>
+</html>{{end}}

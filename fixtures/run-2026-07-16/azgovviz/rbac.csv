@@ -1,0 +1,7 @@
+RoleAssignmentId,RoleDefinitionName,PrincipalType,PrincipalDisplayName,PrincipalId,Scope,CreatedOn
+ra-1,Owner,User,Alice Admin,00000000-0000-0000-0000-0000000000a1,/subscriptions/sub-a,2025-01-10
+ra-2,Contributor,User,Bob Dev,00000000-0000-0000-0000-0000000000b2,/subscriptions/sub-a/resourceGroups/rg-app,2025-03-02
+ra-3,Reader,Group,Audit Readers,00000000-0000-0000-0000-0000000000c3,/subscriptions/sub-a,2025-02-14
+ra-4,Contributor,ServicePrincipal,deploy-sp,00000000-0000-0000-0000-0000000000d4,/subscriptions/sub-b,2025-01-20
+ra-6,Contributor,User,New Hire,00000000-0000-0000-0000-0000000000f6,/subscriptions/sub-a/resourceGroups/rg-app,2026-06-28
+ra-7,Owner,User,Contractor X,00000000-0000-0000-0000-0000000000a7,/providers/Microsoft.Management/managementGroups/root,2026-07-14

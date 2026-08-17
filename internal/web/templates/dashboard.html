@@ -1,0 +1,156 @@
+{{define "dashboard.html"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Azure GovLens — {{.TenantDisplay}}</title>
+{{template "styles"}}
+</head>
+<body>
+<div class="wrap">
+  {{template "topbar" dict "User" .User "Tenant" .Tenant}}
+  <header>
+    <div>
+      <div class="sub" style="display:flex;align-items:center;gap:8px">
+        <span>Tenant</span>
+        <select class="tsel" onchange="location='/?tenant='+encodeURIComponent(this.value)" aria-label="Select tenant">
+          {{range .Tenants}}<option value="{{.ID}}" {{if eq .ID $.Tenant}}selected{{end}}>{{.Display}}</option>{{end}}
+        </select>
+        <span>· {{.Runs}} run{{if ne .Runs 1}}s{{end}}{{if .Latest}} · latest {{date .Latest.Run.CollectedAt}}{{end}}</span>
+      </div>
+    </div>
+    <div class="sub" style="text-align:right">Azure Policy · RBAC · Entra CA · Maester</div>
+  </header>
+
+  {{if not .Latest}}
+    <div class="card empty">No runs ingested yet. Run <code>ingest -all fixtures</code> and refresh.</div>
+  {{else}}
+
+  <div class="tiles">
+    <div class="card tile">
+      <div class="k">Policy compliance</div>
+      <div class="v">{{pct .Latest.PolicyPct}}</div>
+      {{template "delta" dict "cur" .Latest.PolicyPct "prev" (prevVal .Prev "policy")}}
+    </div>
+    <div class="card tile">
+      <div class="k">Maester pass rate</div>
+      <div class="v">{{pct .Latest.MaesterPct}}</div>
+      {{template "delta" dict "cur" .Latest.MaesterPct "prev" (prevVal .Prev "maester")}}
+    </div>
+    <div class="card tile">
+      <div class="k">CA policies enabled</div>
+      <div class="v mono">{{.Latest.CAEnabled}}<span class="sub"> / {{.Latest.CATotal}}</span></div>
+      <div class="delta flat">Entra Conditional Access</div>
+    </div>
+    <div class="card tile">
+      <div class="k">RBAC assignments</div>
+      <div class="v mono">{{.Latest.RBACCount}}</div>
+      <div class="delta flat">{{.Latest.FailedControl}} failing controls</div>
+    </div>
+  </div>
+
+  <h2>Compliance trend</h2>
+  <div class="card chart">
+    <svg viewBox="0 0 900 220" preserveAspectRatio="none" role="img" aria-label="compliance trend">
+      {{range $g := gridlines}}
+        <line x1="40" x2="880" y1="{{$g.Y}}" y2="{{$g.Y}}" stroke="var(--line)"/>
+        <text x="6" y="{{$g.TextY}}" fill="var(--muted)" font-size="10">{{$g.Label}}</text>
+      {{end}}
+      <polyline fill="none" stroke="var(--accent2)" stroke-width="2.5" points="{{.PolicyLine.Points}}"/>
+      <polyline fill="none" stroke="var(--accent)"  stroke-width="2.5" points="{{.MaesterLine.Points}}"/>
+      {{range .PolicyLine.Dots}}{{if .Has}}<circle cx="{{.X}}" cy="{{.Y}}" r="3.5" fill="var(--accent2)"><title>{{.Label}}: {{printf "%.1f%%" .Val}}</title></circle>{{end}}{{end}}
+      {{range .MaesterLine.Dots}}{{if .Has}}<circle cx="{{.X}}" cy="{{.Y}}" r="3.5" fill="var(--accent)"><title>{{.Label}}: {{printf "%.1f%%" .Val}}</title></circle>{{end}}{{end}}
+      {{range .PolicyLine.Dots}}<text x="{{.X}}" y="212" fill="var(--muted)" font-size="10" text-anchor="middle">{{.Label}}</text>{{end}}
+    </svg>
+    <div class="legend">
+      <span><span class="swatch" style="background:var(--accent2)"></span>Azure Policy compliance</span>
+      <span><span class="swatch" style="background:var(--accent)"></span>Maester pass rate</span>
+    </div>
+  </div>
+
+  <div class="split">
+    <div>
+      <h2>Drift since previous run
+        {{if .DriftOlder}}<span class="sub">({{date .DriftOlder.CollectedAt}} → {{date .DriftNewer.CollectedAt}})</span>{{end}}
+      </h2>
+      <div class="card">
+        {{range .Suppressed}}
+        <div class="warn-banner">⚠ {{if eq .Kind "rbac"}}RBAC{{else}}Conditional Access{{end}} drift hidden — {{.Reason}} (avoids false mass-removal)</div>
+        {{end}}
+        {{if .Drift}}
+        <div class="sub" style="margin-bottom:8px">
+          <span class="badge b-added">+{{.AddedCount}} added</span>
+          <span class="badge b-removed">−{{.RemovedCount}} removed</span>
+        </div>
+        <table>
+          <thead><tr><th>Type</th><th>Change</th><th>Item</th><th>Detail</th></tr></thead>
+          <tbody>
+          {{range .Drift}}
+            <tr>
+              <td class="dom">{{if eq .Kind "rbac"}}RBAC{{else}}CA policy{{end}}</td>
+              <td><span class="badge b-{{.Change}}">{{.Change}}</span></td>
+              <td>{{.Display}}</td>
+              <td class="sub">{{.Detail}}</td>
+            </tr>
+          {{end}}
+          </tbody>
+        </table>
+        {{else if not .Suppressed}}
+        <div class="empty">No RBAC / Conditional Access drift between the last two runs.</div>
+        {{end}}
+      </div>
+    </div>
+
+    <div>
+      <h2>Top failing controls <span class="sub">(latest run)</span></h2>
+      <div class="card">
+        {{if .Findings}}
+        <table>
+          <thead><tr><th>Sev</th><th>Control</th><th>Where</th></tr></thead>
+          <tbody>
+          {{range .Findings}}
+            <tr>
+              <td class="sev sev-{{.Severity}}">{{.Severity}}</td>
+              <td>{{.Title}}<div class="dom">{{.Domain}} · {{.Source}}</div></td>
+              <td class="sub">{{if .Scope}}{{.Scope}}{{else}}{{.Category}}{{end}}</td>
+            </tr>
+          {{end}}
+          </tbody>
+        </table>
+        {{else}}
+        <div class="empty">No failing controls 🎉</div>
+        {{end}}
+      </div>
+    </div>
+  </div>
+
+  <h2>Runs <span class="sub">(click to drill in)</span></h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>Collected</th><th>Sources</th><th></th></tr></thead>
+      <tbody>
+      {{range .RunList}}
+        <tr>
+          <td><a class="rowlink" href="/run?run={{.ID}}">{{date .CollectedAt}}</a></td>
+          <td>{{range .Sources}}<span class="badge b-src">{{.}}</span>{{end}}</td>
+          <td><a class="rowlink" href="/run?run={{.ID}}">details →</a></td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+
+  {{end}}
+
+  {{template "footer"}}
+</div>
+</body>
+</html>{{end}}
+
+{{define "delta"}}
+  {{$d := sub .cur .prev}}
+  {{if or (lt .cur 0.0) (lt .prev 0.0)}}<div class="delta flat">vs previous —</div>
+  {{else if gt $d 0.05}}<div class="delta up">▲ {{printf "%.1f" $d}} pts</div>
+  {{else if lt $d -0.05}}<div class="delta down">▼ {{printf "%.1f" (sub 0.0 $d)}} pts</div>
+  {{else}}<div class="delta flat">no change</div>{{end}}
+{{end}}

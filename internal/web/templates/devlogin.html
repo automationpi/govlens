@@ -1,0 +1,25 @@
+{{define "devlogin.html"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Azure GovLens — Dev sign in</title>
+{{template "styles"}}
+</head>
+<body>
+<div class="wrap" style="max-width:460px">
+  <header><div><h1>Azure Gov<span class="lens">Lens</span></h1>
+    <div class="sub" style="margin-top:4px">Dev sign in</div></div></header>
+  <div class="warn-banner">Dev provider — for local testing only. Any email is accepted; there is no real verification.</div>
+  <div class="card">
+    <form method="post" action="/auth/callback" style="display:flex;flex-direction:column;gap:10px">
+      <input type="hidden" name="state" value="{{.State}}">
+      <input type="email" name="email" class="finput" placeholder="you@example.com" required>
+      <input type="text" name="name" class="finput" placeholder="Display name (optional)">
+      <button class="fbtn" type="submit">Sign in</button>
+    </form>
+  </div>
+  <div class="sub" style="margin-top:20px">Switch to real auth by setting <code>GOVLENS_AUTH=entra</code> (or any OIDC issuer).</div>
+</div>
+</body>
+</html>{{end}}

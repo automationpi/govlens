@@ -1,0 +1,11 @@
+{ "Result": "Failed", "Tests": [
+  {"Id":"MT.1001","Name":"Security defaults or Conditional Access is enabled","Result":"Passed","Block":"Entra ID","Severity":"High"},
+  {"Id":"MT.1003","Name":"MFA is required for all users","Result":"Passed","Block":"Conditional Access","Severity":"High"},
+  {"Id":"MT.1005","Name":"PIM is used for privileged role activation","Result":"Passed","Block":"Privileged Access","Severity":"Medium"},
+  {"Id":"MT.1010","Name":"Password hash sync is enabled","Result":"Passed","Block":"Hybrid","Severity":"Low"},
+  {"Id":"MT.1021","Name":"Sign-in risk policy is configured","Result":"Passed","Block":"Identity Protection","Severity":"Medium"},
+  {"Id":"MT.1030","Name":"Break-glass accounts excluded from MFA policy","Result":"Passed","Block":"Conditional Access","Severity":"Low"},
+  {"Id":"MT.1002","Name":"Legacy authentication is blocked","Result":"Failed","Block":"Conditional Access","Severity":"High","HelpUrl":"https://maester.dev/t/MT.1002"},
+  {"Id":"MT.1004","Name":"MFA is required for admin roles","Result":"Failed","Block":"Conditional Access","Severity":"High","HelpUrl":"https://maester.dev/t/MT.1004"},
+  {"Id":"MT.1017","Name":"Stale guest accounts are removed","Result":"Failed","Block":"Identity Governance","Severity":"Medium"}
+] }

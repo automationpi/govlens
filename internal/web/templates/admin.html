@@ -1,0 +1,266 @@
+{{define "admin.html"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Azure GovLens — Admin · Approvers</title>
+{{template "styles"}}
+</head>
+<body>
+<div class="wrap">
+  {{template "topbar" dict "User" .User "Tenant" ""}}
+  <header>
+    <div>
+      <div class="sub"><a class="back" href="/">← dashboard</a> · Admin — users &amp; approvers</div>
+    </div>
+  </header>
+
+  {{if .Notice}}
+  <div class="warn-banner">{{.Notice}} <a class="back" href="#ssar" style="margin-left:8px">Jump to the enablement gates ↓</a></div>
+  {{end}}
+
+  {{if not .Enabled}}
+  <div class="warn-banner">Authentication is <strong>off</strong> (<code>GOVLENS_AUTH=off</code>). Roles here have no effect until auth is enabled; you are shown as a local admin.</div>
+  {{end}}
+
+  <h2>Grant a role</h2>
+  <div class="card">
+    <form method="post" action="/admin/grant" class="filters">
+      <input type="email" name="email" class="finput" placeholder="user@tenant.com" required>
+      <select name="role" class="tsel">
+        <option value="approver">approver</option>
+        <option value="admin">admin</option>
+      </select>
+      <select name="scope" class="tsel" aria-label="Scope">
+        {{if .User.IsAdmin}}<option value="*">Global — all subscriptions</option>{{end}}
+        {{range .Subscriptions}}{{if $.User.IsAdminOf .ID}}<option value="{{.ID}}">{{.Name}}</option>{{end}}{{end}}
+      </select>
+      <button class="fbtn" type="submit">Grant</button>
+    </form>
+    <div class="sub" style="margin-top:8px">
+      <strong>Global</strong> grants apply tenant-wide; a <strong>subscription</strong> grant scopes the role to that
+      subscription only — so a team's <strong>approver</strong> can only approve revocations for their own subscription,
+      and a subscription <strong>admin</strong> can add approvers for it. Any signed-in user can view and request.
+      Bootstrap global admins come from <code>GOVLENS_ADMIN_EMAILS</code>.
+    </div>
+  </div>
+
+  <h2>Users <span class="sub">{{len .Users}}</span></h2>
+  <div class="card">
+    {{if .Users}}
+    <div class="tablewrap"><table>
+      <thead><tr><th>Email</th><th>Name</th><th>Grants (scope · role)</th></tr></thead>
+      <tbody>
+      {{range .Users}}
+        {{$email := .Email}}{{$me := $.User}}
+        <tr>
+          <td>{{.Email}}</td>
+          <td class="sub">{{.Name}}</td>
+          <td>
+            {{range .Grants}}
+              <span class="rolebadge" style="margin:0 4px 4px 0;display:inline-flex;align-items:center;gap:4px">
+                {{if eq .Scope "*"}}global{{else}}sub {{slice .Scope 0 8}}…{{end}} · {{.Role}}
+                {{if $me.IsAdminOf .Scope}}<form method="post" action="/admin/revoke" style="display:inline">
+                  <input type="hidden" name="email" value="{{$email}}"><input type="hidden" name="scope" value="{{.Scope}}"><input type="hidden" name="role" value="{{.Role}}">
+                  <button class="xbtn" type="submit" title="remove">×</button></form>{{end}}
+              </span>
+            {{else}}<span class="sub">—</span>{{end}}
+          </td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table></div>
+    {{else}}<div class="empty">No users yet. Grant a role above, or users appear here after they first sign in.</div>{{end}}
+  </div>
+
+  <h2>Non-revocable roles <span class="sub">{{len .Protected}}</span></h2>
+  <div class="card">
+    <form method="post" action="/admin/protect" class="filters">
+      <input type="text" name="role" class="finput" placeholder="exact role name, e.g. Owner or User Access Administrator" required>
+      <button class="fbtn" type="submit">Protect</button>
+    </form>
+    <div class="sub" style="margin-top:8px">
+      A role listed here can never be revoked through this tool: the <strong>Revoke</strong> button is hidden on run pages,
+      the mark endpoint refuses it, and the worker skips it. (Match the role name exactly as it appears in the tables.)
+    </div>
+    {{if .Protected}}
+    <div class="tablewrap" style="margin-top:12px"><table>
+      <thead><tr><th>Role</th><th>Added by</th><th></th></tr></thead>
+      <tbody>
+      {{range .Protected}}
+        <tr>
+          <td>🔒 {{.Role}}</td>
+          <td class="sub">{{.AddedBy}}</td>
+          <td>
+            {{if ne .AddedBy "system"}}
+            <form method="post" action="/admin/unprotect" style="display:inline">
+              <input type="hidden" name="role" value="{{.Role}}">
+              <button class="markbtn" type="submit">remove</button>
+            </form>
+            {{else}}<span class="sub">default</span>{{end}}
+          </td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table></div>
+    {{end}}
+  </div>
+
+  {{if .User.IsAdmin}}
+  <h2>Principal-type policy <span class="sub">who can be revoked, by identity type</span></h2>
+  <div class="card">
+    <div class="tablewrap"><table>
+      <thead><tr><th>Principal type</th><th>Revocation policy</th></tr></thead>
+      <tbody>
+      {{range types}}
+        {{$t := .}}
+        <tr>
+          <td>{{$t}}</td>
+          <td>
+            <form method="post" action="/admin/typepolicy" class="decide">
+              <input type="hidden" name="type" value="{{$t}}">
+              <select name="policy" class="tsel">
+                <option value="allow" {{if not (index $.TypePolicies $t)}}selected{{end}}>allow — normal review</option>
+                <option value="global" {{if eq (index $.TypePolicies $t) "global"}}selected{{end}}>require global-admin approval</option>
+                <option value="blocked" {{if eq (index $.TypePolicies $t) "blocked"}}selected{{end}}>blocked — never revocable</option>
+              </select>
+              <button class="fbtn" type="submit">Save</button>
+            </form>
+          </td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table></div>
+    <div class="sub" style="margin-top:8px">
+      <strong>blocked</strong> hides Revoke for that type and the worker skips it (e.g. disable deleting Groups or
+      Service Principals). <strong>require global-admin approval</strong> still lets anyone request, but only a
+      <em>global</em> approver — not a subscription-scoped one — may approve it (e.g. Group deletions need top-level sign-off).
+    </div>
+  </div>
+  {{end}}
+
+  {{if .User.IsAdmin}}
+  <h2 id="ssar">Self-service access requests <span class="sub">module · {{if .Grant.Live}}<span style="color:var(--good)">live</span>{{else}}{{.Grant.CapabilityState}}{{end}}</span></h2>
+  <div class="card">
+    <div class="sub" style="margin-bottom:12px">
+      Opt-in module that lets users <strong>request</strong> new access through the same approval flow, with a
+      write-capable worker provisioning time-bound grants. Off by default; goes live only when every gate below is green
+      (<a class="back" href="#" onclick="return false">fail-closed</a>). See <code>docs/SELF-SERVICE-GRANT.md</code>.
+    </div>
+
+    <!-- Enablement gates -->
+    <div class="tablewrap"><table>
+      <thead><tr><th>#</th><th>Gate</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td class="sub">1</td><td>Capability turned on</td>
+          <td>{{if or (eq .Grant.CapabilityState "configuring") (eq .Grant.CapabilityState "live")}}<span style="color:var(--good)">✔ {{.Grant.CapabilityState}}</span>{{else}}<span class="sub">○ {{.Grant.CapabilityState}}</span>{{end}}</td></tr>
+        <tr><td class="sub">2</td><td>Grant service principal verified <span class="sub">(24h probe)</span></td>
+          <td>{{if .Grant.SPVerified}}<span style="color:var(--good)">✔ verified</span>{{else if .Grant.SPConfigured}}<span style="color:var(--warn)">⚠ configured — {{.Grant.SPNote}}</span>{{else}}<span class="sub">○ not configured</span>{{end}}</td></tr>
+        <tr><td class="sub">3</td><td>Tier policy acknowledged</td>
+          <td>{{if .Grant.TiersAck}}<span style="color:var(--good)">✔ acknowledged</span>{{else}}<span class="sub">○ review each tier below</span>{{end}}</td></tr>
+        <tr><td class="sub">4</td><td>Catalog has requestable roles</td>
+          <td>{{if gt .Grant.CatalogCount 0}}<span style="color:var(--good)">✔ {{.Grant.CatalogCount}} requestable</span>{{else}}<span class="sub">○ none yet (auto-discovered on collect — next slice)</span>{{end}}</td></tr>
+        <tr><td class="sub">5</td><td>At least one subscription opted in</td>
+          <td>{{if gt .Grant.ScopeOptIns 0}}<span style="color:var(--good)">✔ {{.Grant.ScopeOptIns}} opted in</span>{{else}}<span class="sub">○ opt a subscription in below</span>{{end}}</td></tr>
+        <tr><td class="sub">6</td><td><strong>Module live</strong></td>
+          <td>{{if .Grant.Live}}<span style="color:var(--good)">✔ intake open</span>{{else}}<span style="color:var(--warn)">✖ intake closed</span>{{end}}</td></tr>
+      </tbody>
+    </table></div>
+
+    <!-- Capability controls -->
+    <div class="filters" style="margin-top:14px">
+      <form method="post" action="/admin/module" style="display:inline">
+        <input type="hidden" name="state" value="configuring">
+        <button class="markbtn" type="submit" {{if or (eq .Grant.CapabilityState "configuring") (eq .Grant.CapabilityState "live")}}disabled{{end}}>Start configuring</button>
+      </form>
+      <form method="post" action="/admin/module" style="display:inline">
+        <input type="hidden" name="state" value="live">
+        <button class="fbtn" type="submit">Go live</button>
+      </form>
+      <form method="post" action="/admin/module" style="display:inline">
+        <input type="hidden" name="state" value="disabled">
+        <button class="revokebtn" type="submit">Disable (stop intake)</button>
+      </form>
+    </div>
+    <div class="sub" style="margin-top:6px">Disabling stops new requests only — it never revokes existing grants; time-bound access still expires on schedule.</div>
+  </div>
+
+  <h3 class="sub" style="margin:18px 0 8px">Grant service principal</h3>
+  <div class="card">
+    <div class="sub" style="margin-bottom:10px">
+      The <strong>only</strong> identity that can create assignments — separate from the read-only collector and the revoke
+      worker. Enter its <strong>non-secret</strong> identity; the credential itself lives in an env var / secret named by the
+      reference below and is never stored here.
+    </div>
+    <form method="post" action="/admin/grantsp" class="filters" style="flex-wrap:wrap;gap:8px">
+      <input type="text" name="app_id" class="finput" placeholder="grant SP app (client) id" value="{{.GrantSP.AppID}}" required>
+      <input type="text" name="sp_tenant_id" class="finput" placeholder="SP tenant id" value="{{.GrantSP.SPTenantID}}" required>
+      <input type="text" name="cred_ref" class="finput" placeholder="credential ref (env/secret name)" value="{{.GrantSP.CredRef}}" required>
+      <input type="text" name="root_scope" class="finput" placeholder="root scope the SP may write within" value="{{.GrantSP.RootScope}}" required>
+      <button class="fbtn" type="submit">Save SP</button>
+    </form>
+    {{if .GrantSP.Configured}}
+    <div class="filters" style="margin-top:10px;align-items:center">
+      <form method="post" action="/admin/grantsp/probe" style="display:inline">
+        <button class="markbtn" type="submit">Run readiness probe</button>
+      </form>
+      <span class="sub">{{if .Grant.SPVerified}}<span style="color:var(--good)">✔ verified</span> · {{end}}by {{.GrantSP.ConfiguredBy}} · {{if .GrantSP.ProbeNote}}{{.GrantSP.ProbeNote}}{{else}}not probed yet{{end}}</span>
+    </div>
+    {{end}}
+  </div>
+
+  <h3 class="sub" style="margin:18px 0 8px">Tier policy <span class="sub">the knobs every role inherits by tier</span></h3>
+  <div class="card">
+    {{range .TierPolicy}}
+    <form method="post" action="/admin/tierpolicy" class="filters" style="flex-wrap:wrap;gap:10px 14px;align-items:center;{{if not .Acknowledged}}border-left:3px solid var(--warn);padding-left:10px;{{end}}margin-bottom:6px">
+      <input type="hidden" name="tier" value="{{.Tier}}">
+      <strong style="min-width:80px">{{.Tier}}</strong>
+      <label class="sub"><input type="checkbox" name="self_service" {{if .SelfService}}checked{{end}}> self-service</label>
+      <label class="sub">default <input type="number" name="default_days" min="0" value="{{.DefaultDays}}" class="finput" style="max-width:70px"> days</label>
+      <label class="sub">max <input type="number" name="max_days" min="0" value="{{.MaxDays}}" class="finput" style="max-width:70px"> (0=∞)</label>
+      <label class="sub"><input type="checkbox" name="allow_permanent" {{if .AllowPermanent}}checked{{end}}> allow permanent</label>
+      <label class="sub">approver
+        <select name="approver_tier" class="tsel">
+          <option value="scoped" {{if eq .ApproverTier "scoped"}}selected{{end}}>scoped</option>
+          <option value="global" {{if eq .ApproverTier "global"}}selected{{end}}>global</option>
+        </select></label>
+      {{if not .Acknowledged}}<span class="sub" style="color:var(--warn)">unreviewed</span>{{end}}
+      <button class="fbtn" type="submit">Save</button>
+    </form>
+    {{end}}
+    <div class="sub" style="margin-top:8px">Roles are auto-classified into these tiers by their permissions (privileged = anything that can grant access). Anything unclassifiable defaults to <strong>privileged</strong> (hidden) — fail-closed.</div>
+  </div>
+
+  <h3 class="sub" style="margin:18px 0 8px">Subscription opt-in</h3>
+  <div class="card">
+    {{if .Subscriptions}}
+    <div class="tablewrap"><table>
+      <thead><tr><th>Subscription</th><th>Self-service enabled</th></tr></thead>
+      <tbody>
+      {{range .Subscriptions}}
+        {{$on := index $.OptIns .ID}}
+        <tr>
+          <td>{{.Name}}<div class="sub"><code class="scope">{{.ID}}</code></div></td>
+          <td>
+            {{if $.User.IsAdminOf .ID}}
+            <form method="post" action="/admin/scopeoptin" class="decide">
+              <input type="hidden" name="scope" value="{{.ID}}">
+              <input type="hidden" name="enabled" value="{{if $on}}off{{else}}on{{end}}">
+              {{if $on}}<span style="color:var(--good)">✔ enabled</span> <button class="markbtn" type="submit">disable</button>
+              {{else}}<span class="sub">disabled</span> <button class="fbtn" type="submit">enable</button>{{end}}
+            </form>
+            {{else}}<span class="sub">{{if $on}}enabled{{else}}—{{end}}</span>{{end}}
+          </td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table></div>
+    {{else}}<div class="empty">No subscriptions collected yet.</div>{{end}}
+    <div class="sub" style="margin-top:8px">A global admin turns the capability on tenant-wide; each subscription admin opts their own subscription in — so you can offer self-service for Test without exposing Production.</div>
+  </div>
+  {{end}}
+
+  {{template "footer"}}
+</div>
+</body>
+</html>{{end}}

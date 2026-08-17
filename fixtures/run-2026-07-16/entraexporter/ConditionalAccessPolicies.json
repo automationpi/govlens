@@ -1,0 +1,6 @@
+[
+  {"id":"ca-001","displayName":"Require MFA for all users","state":"enabled","grantControls":{"builtInControls":["mfa"]}},
+  {"id":"ca-002","displayName":"Block legacy authentication","state":"enabled","grantControls":{"builtInControls":["block"]}},
+  {"id":"ca-003","displayName":"Require compliant device","state":"enabledForReportingButNotEnforced","grantControls":{"builtInControls":["compliantDevice"]}},
+  {"id":"ca-004","displayName":"Require MFA for admin roles","state":"enabled","grantControls":{"builtInControls":["mfa"]}}
+]

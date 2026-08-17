@@ -1,0 +1,83 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: govlens
+      POSTGRES_PASSWORD: govlens
+      POSTGRES_DB: govlens
+    ports:
+      - "5432:5432"          # exposed so the host MCP binary / tools can reach the DB
+    volumes:
+      # In production this path is your mounted Azure managed disk.
+      - ./pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U govlens"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # One-shot: load the fixture runs, then exit. Run again any time to re-ingest.
+  ingest:
+    build: .
+    entrypoint: ["/ingest", "-all", "/fixtures"]
+    environment:
+      DATABASE_URL: postgres://govlens:govlens@db:5432/govlens?sslmode=disable
+    volumes:
+      - ./fixtures:/fixtures:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  # The ONLY component that can revoke access. Separate, write-capable SP
+  # (govlens-remediator, roles-only). Loops hourly; processes 'approved' requests
+  # behind the safety gate. -execute makes real deletions; drop it for dry-run.
+  remediator:
+    build: .
+    # run as the host user so it can read its own 600 certificate mount
+    user: "1000:1000"
+    entrypoint: ["/remediator"]
+    command: ["-execute", "-interval", "3600"]
+    env_file:
+      - remediator.env
+    volumes:
+      - ./bin/remediator.pem:/cert.pem:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Write-capable grant worker: provisions APPROVED grant requests (creates role
+  # assignments) and sweeps expired grants. Separate SP (govlens-grant, roles-only
+  # read+write; NO delete). Re-probes each cycle to keep the readiness gate fresh.
+  # 5-minute interval for responsive testing; raise to 3600 for production.
+  grantworker:
+    build: .
+    user: "1000:1000"
+    entrypoint: ["/grantworker"]
+    command: ["-execute", "-interval", "300"]
+    env_file:
+      - grantworker.env
+    volumes:
+      - ./bin/grant.pem:/cert.pem:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build: .
+    entrypoint: ["/web"]   # dev compose runs single components; the image default is /govlensd
+    environment:
+      DATABASE_URL: postgres://govlens:govlens@db:5432/govlens?sslmode=disable
+      TENANT: example
+      ADDR: ":8080"
+    # Auth config (real secrets) live in web.env (gitignored). Set GOVLENS_AUTH
+    # there: entra | oidc | dev | off. See docs/ARCHITECTURE.md.
+    env_file:
+      - web.env
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy

@@ -1,0 +1,39 @@
+# --- secrets & real deployment config (never commit) ---
+# Real config lives in config.yaml; only config.example.yaml is tracked.
+config.yaml
+*.local.yaml
+
+# Env files carrying secrets (client secrets, DSNs, session secret)
+*.env
+web.env
+remediator.env
+grantworker.env
+bin/*.env
+
+# Certificates / private keys
+*.pem
+*.key
+*.pfx
+bin/*.pem
+secrets/
+
+# --- local state ---
+pgdata/          # Postgres data volume (dev compose)
+/out/
+*.log
+
+# --- Claude / AI assistant working files (never publish) ---
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+.cursor/
+.aider*
+scratchpad/
+*.scratch
+raw-runs/
+
+# --- build artifacts, real run data, vendored third-party (never publish) ---
+bin/
+realrun/
+realrun2/
+third_party/

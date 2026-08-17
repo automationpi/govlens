@@ -1,0 +1,35 @@
+name: pages
+
+# Publish the HTML user + operator guides (docs/user-guide/) to GitHub Pages.
+# Site root = docs/user-guide, so the guide lands at:
+#   https://automationpi.github.io/govlens/
+#   https://automationpi.github.io/govlens/operator.html
+on:
+  push:
+    branches: ['main']
+    paths: ['docs/user-guide/**', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/user-guide          # served as the site root (static, no Jekyll)
+      - id: deployment
+        uses: actions/deploy-pages@v4

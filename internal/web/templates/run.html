@@ -1,0 +1,189 @@
+{{define "run.html"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Azure GovLens — {{.Run.Display}} · {{date .Run.CollectedAt}}</title>
+{{template "styles"}}
+</head>
+<body>
+<div class="wrap">
+  {{template "topbar" dict "User" .User "Tenant" .Run.Tenant}}
+  <header>
+    <div>
+      <div class="sub">
+        <a class="back" href="/?tenant={{.Run.Tenant}}">← {{.Run.Display}}</a>
+        · run of <strong>{{date .Run.CollectedAt}}</strong>
+        · {{range .Run.Sources}}<span class="badge b-src">{{.}}</span>{{end}}
+      </div>
+    </div>
+    <div class="sub" style="text-align:right">run #{{.Run.ID}}</div>
+  </header>
+
+  {{if .Point}}
+  <div class="tiles">
+    <div class="card tile"><div class="k">Policy compliance</div><div class="v">{{pct .Point.PolicyPct}}</div></div>
+    <div class="card tile"><div class="k">Maester pass rate</div><div class="v">{{pct .Point.MaesterPct}}</div></div>
+    <div class="card tile"><div class="k">CA policies enabled</div><div class="v mono">{{.Point.CAEnabled}}<span class="sub"> / {{.Point.CATotal}}</span></div></div>
+    <div class="card tile"><div class="k">RBAC assignments</div><div class="v mono">{{.Point.RBACCount}}</div></div>
+  </div>
+  {{end}}
+
+  {{if .Subscriptions}}
+  <div style="margin:20px 0 4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <span class="sub">Subscription</span>
+    <select class="tsel" aria-label="Filter by subscription"
+            onchange="location='/run?run={{.Run.ID}}'+(this.value?'&sub='+encodeURIComponent(this.value):'')">
+      <option value="">All subscriptions</option>
+      {{range .Subscriptions}}<option value="{{.ID}}" {{if eq .ID $.Sub}}selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+    {{if .Sub}}<span class="sub">· scoping RBAC &amp; findings to this subscription</span>{{end}}
+  </div>
+  {{end}}
+
+  <h2>Failing controls</h2>
+  <div class="card">
+    {{if .Findings}}
+    <div class="tablewrap"><table>
+      <thead><tr><th>Sev</th><th>Control</th><th>Where</th></tr></thead>
+      <tbody>
+      {{range .Findings}}
+        <tr>
+          <td class="sev sev-{{.Severity}}">{{.Severity}}</td>
+          <td>{{.Title}}<div class="dom">{{.Domain}} · {{.Source}}</div></td>
+          <td class="sub">{{if .Scope}}<code class="scope">{{.Scope}}</code>{{else}}{{.Category}}{{end}}</td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table></div>
+    {{else}}<div class="empty">No failing controls 🎉</div>{{end}}
+  </div>
+
+  <h2 id="dirroles">Entra directory roles
+    <span class="sub">privileged access review · {{if gt .DirRoleAll (len .DirRoles)}}first {{len .DirRoles}} of {{.DirRoleAll}}{{else}}{{.DirRoleAll}} total{{end}}</span>
+  </h2>
+  <div class="card">
+    {{if .DirRoles}}
+    <div class="tablewrap"><table>
+      <thead><tr><th>Directory role</th><th>Principal</th><th>Type</th><th>Scope</th><th></th></tr></thead>
+      <tbody>
+      {{range .DirRoles}}
+        <tr>
+          <td>{{if priv .Role}}<span class="sev sev-High">{{.Role}}</span>{{else}}{{.Role}}{{end}}</td>
+          <td>{{.Principal}}</td>
+          <td><span class="badge {{if eq .PrincipalType "User"}}b-user{{else if eq .PrincipalType "Group"}}b-group{{else}}b-sp{{end}}">{{if .PrincipalType}}{{.PrincipalType}}{{else}}?{{end}}</span></td>
+          <td class="sub">{{.Scope}}</td>
+          <td>{{template "markcell" dict "Row" . "Run" $.Run "Marked" $.Marked "Protected" $.Protected "Blocked" $.Blocked "Back" "dirroles"}}</td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table></div>
+    {{else}}<div class="empty">No directory role assignments in this run.</div>{{end}}
+  </div>
+
+  <h2 id="rbac">Role assignments (RBAC)
+    <span class="sub">
+      {{if or .RBACType .RBACQuery}}{{len .RBAC}} of {{.RBACMatched}} matching · {{.RBACAll}} total
+      {{else if gt .RBACAll (len .RBAC)}}showing first {{len .RBAC}} of {{.RBACAll}}
+      {{else}}{{.RBACAll}} total{{end}}
+    </span>
+  </h2>
+  <div class="card">
+    <form method="get" class="filters" onsubmit="return goFilter(this)">
+      <input type="hidden" name="run" value="{{.Run.ID}}">
+      <select name="rbac_type" class="tsel" onchange="goFilter(this.form)" aria-label="Principal type">
+        <option value="">All types</option>
+        <option value="User" {{if eq .RBACType "User"}}selected{{end}}>User</option>
+        <option value="Group" {{if eq .RBACType "Group"}}selected{{end}}>Group</option>
+        <option value="ServicePrincipal" {{if eq .RBACType "ServicePrincipal"}}selected{{end}}>Service principal</option>
+      </select>
+      <input type="search" name="rbac_q" value="{{.RBACQuery}}" class="finput" placeholder="filter principal, role or scope…">
+      <button class="fbtn" type="submit">Filter</button>
+      {{if or .RBACType .RBACQuery}}<a class="back" href="/run?run={{.Run.ID}}#rbac">clear</a>{{end}}
+    </form>
+    {{if .RBAC}}
+    <div class="tablewrap"><table>
+      <thead><tr><th>Principal</th><th>Type</th><th>Role</th><th>Scope</th><th></th></tr></thead>
+      <tbody>
+      {{range .RBAC}}
+        <tr>
+          <td>{{.Principal}}</td>
+          <td><span class="badge {{if eq .PrincipalType "User"}}b-user{{else if eq .PrincipalType "Group"}}b-group{{else}}b-sp{{end}}">{{.PrincipalType}}</span></td>
+          <td>{{.Role}}</td>
+          <td><code class="scope">{{.Scope}}</code></td>
+          <td>{{template "markcell" dict "Row" . "Run" $.Run "Marked" $.Marked "Protected" $.Protected "Blocked" $.Blocked "Back" "rbac"}}</td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table></div>
+    {{else}}<div class="empty">{{if or .RBACType .RBACQuery}}No assignments match the filter.{{else}}No RBAC assignments in this run.{{end}}</div>{{end}}
+  </div>
+
+  <h2>Conditional Access policies <span class="sub">{{.CAAll}} total</span></h2>
+  <div class="card">
+    {{if .CA}}
+    <div class="tablewrap"><table>
+      <thead><tr><th>Policy</th><th>State</th><th>Grant controls</th></tr></thead>
+      <tbody>
+      {{range .CA}}
+        <tr>
+          <td>{{.Display}}</td>
+          <td><span class="badge {{if eq .Role "enabled"}}b-added{{else if eq .Role "enabledForReportingButNotEnforced"}}b-changed{{else}}b-removed{{end}}">{{.Role}}</span></td>
+          <td class="sub">{{if .Scope}}{{.Scope}}{{else}}—{{end}}</td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table></div>
+    {{else}}<div class="empty">No Conditional Access policies in this run.</div>{{end}}
+  </div>
+
+  {{template "footer"}}
+</div>
+<script>
+  // Submit the RBAC filter to a #rbac anchor so the page lands on the table
+  // instead of jumping back to the top on reload.
+  function goFilter(f){
+    var p = new URLSearchParams();
+    p.set('run', f.run.value);
+    if (f.rbac_type.value) p.set('rbac_type', f.rbac_type.value);
+    var q = f.rbac_q.value.trim();
+    if (q) p.set('rbac_q', q);
+    location.href = '/run?' + p.toString() + '#rbac';
+    return false;
+  }
+
+  // Mark-for-revoke submits in the background and swaps the row cell in place —
+  // no page reload, so you keep your scroll position.
+  document.addEventListener('submit', function(e){
+    var f = e.target;
+    if (!f.action || f.action.indexOf('/revoke/mark') === -1) return;
+    e.preventDefault();
+    var btn = f.querySelector('button');
+    var td = f.closest('td');
+    btn.disabled = true; btn.textContent = '…';
+    fetch(f.action, {
+      method: 'POST',
+      headers: { 'X-Requested-With': 'fetch' },
+      body: new URLSearchParams(new FormData(f))
+    }).then(function(r){ return r.ok ? r.json() : r.text().then(function(t){ return Promise.reject(t); }); })
+      .then(function(d){
+        td.innerHTML = '<span class="badge b-changed" title="a revoke request is open for this assignment">revoke · ' + (d.status || 'pending') + '</span>';
+      })
+      .catch(function(err){ btn.disabled = false; btn.textContent = '⊘ Revoke'; alert(typeof err === 'string' && err ? err : 'Could not open revoke request.'); });
+  });
+</script>
+</body>
+</html>{{end}}
+
+{{define "markcell"}}{{$m := index .Marked .Row.Ident}}{{if $m}}<span class="badge b-changed" title="a revoke request is open for this assignment">revoke · {{$m}}</span>{{else if index .Blocked .Row.PrincipalType}}<span class="badge b-src" title="revocation of this principal type is disabled by admin policy">🔒 {{.Row.PrincipalType}} blocked</span>{{else if index .Protected .Row.Role}}<span class="badge b-src" title="this role is protected (non-revocable) by admin policy">🔒 protected</span>{{else}}<form method="post" action="/revoke/mark" style="display:inline">
+  <input type="hidden" name="tenant" value="{{.Run.Tenant}}">
+  <input type="hidden" name="run" value="{{.Run.ID}}">
+  <input type="hidden" name="kind" value="{{.Row.Kind}}">
+  <input type="hidden" name="ident" value="{{.Row.Ident}}">
+  <input type="hidden" name="principal" value="{{.Row.Principal}}">
+  <input type="hidden" name="ptype" value="{{.Row.PrincipalType}}">
+  <input type="hidden" name="role" value="{{.Row.Role}}">
+  <input type="hidden" name="scope" value="{{.Row.Scope}}">
+  <input type="hidden" name="back" value="{{.Back}}">
+  <button class="revokebtn" type="submit" title="Open a revoke request (2-stage review — nothing is revoked yet)">⊘ Revoke</button>
+</form>{{end}}{{end}}
