@@ -131,8 +131,54 @@ az ad app credential reset --id <span class="k">&lt;web-app-id&gt;</span>   <spa
   able to sign in; their GovLens roles come from GovLens's own grants.</p>
 
   <h2 id="config">Config reference</h2>
-  <p>Everything lives in one <code>config.yaml</code>. See <code>config.example.yaml</code> in the repo for a
-  filled-in template.</p>
+  <p>Everything lives in one <code>config.yaml</code>. Copy the sample below, replace each
+  <code>&lt;placeholder&gt;</code>, and fill in your database, auth, and service principals. Any value can use
+  <code>${ENV_VAR}</code> to read a secret from the environment instead of writing it in the file.</p>
+
+  <h3>Sample <code>config.yaml</code></h3>
+  <pre class="cmd"><span class="c"># Run the whole stack from one image against your own Postgres:</span>
+<span class="c">#   docker run -v ./config.yaml:/etc/govlens/config.yaml -p 8080:8080 ghcr.io/automationpi/govlens</span>
+
+tenant:
+  label: example                    <span class="c"># stable key shown in the UI (default: the SP tenant id)</span>
+
+database:
+  <span class="c"># Bring your own Postgres; GovLens creates its own schema on first start.</span>
+  dsn: <span class="k">"${DATABASE_URL}"</span>          <span class="c"># postgres://user:pass@host:5432/govlens?sslmode=require</span>
+
+server:
+  addr: <span class="k">":8080"</span>
+
+auth:
+  mode: entra                       <span class="c"># entra | oidc | dev | off</span>
+  entra_tenant: <span class="k">&lt;your-tenant-id&gt;</span>
+  oidc_client_id: <span class="k">&lt;web-app-registration-id&gt;</span>
+  oidc_client_secret: <span class="k">"${OIDC_CLIENT_SECRET}"</span>
+  redirect_url: https://govlens.example.com/auth/callback
+  session_secret: <span class="k">"${GOVLENS_SESSION_SECRET}"</span>
+  admin_emails:
+    - you@example.com
+
+<span class="c"># Each SP takes EITHER a certificate OR a client secret (your choice per SP).</span>
+<span class="c"># cert may be a file path, an inline PEM, or base64-encoded PEM.</span>
+service_principals:
+  collector:                        <span class="c"># read-only: pulls governance data</span>
+    app_id: <span class="k">&lt;collector-app-id&gt;</span>
+    cert: /secrets/collector.pem
+  remediator:                       <span class="c"># roleAssignments read+delete: executes revokes</span>
+    app_id: <span class="k">&lt;remediator-app-id&gt;</span>
+    secret: <span class="k">"${REMEDIATOR_SECRET}"</span>
+  grant:                            <span class="c"># roleAssignments read+write: provisions grants</span>
+    app_id: <span class="k">&lt;grant-app-id&gt;</span>
+    cert: /secrets/grant.pem
+    root_scope: /providers/Microsoft.Management/managementGroups/<span class="k">&lt;your-mg-root&gt;</span>
+
+modules:
+  collector:  { enabled: true, interval: 3600 }
+  remediator: { enabled: true, execute: true, interval: 3600 }
+  grant:      { enabled: true, execute: true, interval: 300 }</pre>
+
+  <h3>Key reference</h3>
   <table>
     <tr><th>Key</th><th>Meaning</th></tr>
     <tr><td><code>tenant.label</code></td><td>Stable key shown in the UI (default: the SP tenant id).</td></tr>
