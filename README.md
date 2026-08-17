@@ -12,6 +12,15 @@ with a guided **request → approve → auto-expire** workflow for granting and 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Image](https://img.shields.io/badge/image-ghcr.io%2Fautomationpi%2Fgovlens-2496ED?logo=docker&logoColor=white)](https://github.com/automationpi/govlens/pkgs/container/govlens)
 [![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white)](go.mod)
+[![Docs](https://img.shields.io/badge/docs-live-2d6cdf)](https://automationpi.github.io/govlens/)
+
+<br>
+
+<a href="https://automationpi.github.io/govlens/"><img src="docs/images/dashboard.svg" alt="GovLens dashboard (illustrative)" width="840"></a>
+
+**[📖 Documentation](https://automationpi.github.io/govlens/)**  ·  [User Guide](https://automationpi.github.io/govlens/)  ·  [Operator Guide](https://automationpi.github.io/govlens/operator.html)
+
+<sub>Dashboard shown with example data.</sub>
 
 </div>
 

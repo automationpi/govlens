@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 660" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" role="img" aria-label="GovLens dashboard (illustrative)">
+  <defs>
+    <filter id="sh" x="-4%" y="-4%" width="108%" height="112%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#1b2b4a" flood-opacity="0.14"/>
+    </filter>
+  </defs>
+
+  <!-- backdrop -->
+  <rect width="1160" height="660" fill="#eef1f5"/>
+
+  <!-- window -->
+  <rect x="12" y="12" width="1136" height="636" rx="16" fill="#ffffff" stroke="#e4e7eb" filter="url(#sh)"/>
+
+  <!-- chrome bar -->
+  <path d="M 12,52 L 12,28 Q 12,12 28,12 L 1132,12 Q 1148,12 1148,28 L 1148,52 Z" fill="#eceef1"/>
+  <line x1="12" y1="52" x2="1148" y2="52" stroke="#e4e7eb"/>
+  <circle cx="36" cy="32" r="6" fill="#f6584f"/>
+  <circle cx="56" cy="32" r="6" fill="#f6be3f"/>
+  <circle cx="76" cy="32" r="6" fill="#2fbe57"/>
+  <rect x="440" y="22" width="280" height="20" rx="10" fill="#ffffff" stroke="#e4e7eb"/>
+  <text x="580" y="36" text-anchor="middle" font-size="12" fill="#8a93a0" font-family="ui-monospace, Menlo, Consolas, monospace">govlens.example.com</text>
+
+  <!-- brand + nav -->
+  <text x="42" y="92" font-size="21" font-weight="800" letter-spacing="-.3" fill="#1b1f24">Azure Gov<tspan fill="#2d6cdf">Lens</tspan></text>
+  <text x="1118" y="90" text-anchor="end" font-size="13" fill="#2d6cdf" font-weight="600">Request access   ·   Requests   ·   Admin   ·   Sign out</text>
+
+  <!-- subline -->
+  <text x="42" y="120" font-size="13" fill="#5b6470">Tenant: <tspan font-weight="700" fill="#1b1f24">Example Org</tspan>  ·  4 runs · latest Aug 17</text>
+  <text x="1118" y="120" text-anchor="end" font-size="13" fill="#5b6470">Azure Policy · RBAC · Entra CA · Maester</text>
+
+  <!-- stat tiles -->
+  <!-- tile geometry: y=150 h=110, x = 42, 315, 588, 861, w=257 -->
+  <g>
+    <rect x="42"  y="150" width="257" height="110" rx="12" fill="#ffffff" stroke="#e4e7eb"/>
+    <text x="60"  y="180" font-size="11" letter-spacing=".5" fill="#5b6470">POLICY COMPLIANCE</text>
+    <text x="60"  y="220" font-size="30" font-weight="800" fill="#1b1f24">84.2%</text>
+    <text x="60"  y="244" font-size="12" fill="#1a7f4b">▲ +2.1 since last run</text>
+
+    <rect x="315" y="150" width="257" height="110" rx="12" fill="#ffffff" stroke="#e4e7eb"/>
+    <text x="333" y="180" font-size="11" letter-spacing=".5" fill="#5b6470">MAESTER PASS RATE</text>
+    <text x="333" y="220" font-size="30" font-weight="800" fill="#1b1f24">91%</text>
+    <text x="333" y="244" font-size="12" fill="#5b6470">3 failed · vs previous +4</text>
+
+    <rect x="588" y="150" width="257" height="110" rx="12" fill="#ffffff" stroke="#e4e7eb"/>
+    <text x="606" y="180" font-size="11" letter-spacing=".5" fill="#5b6470">CA POLICIES ENABLED</text>
+    <text x="606" y="220" font-size="30" font-weight="800" fill="#1b1f24">12<tspan font-size="18" fill="#5b6470"> / 14</tspan></text>
+    <text x="606" y="244" font-size="12" fill="#5b6470">Entra Conditional Access</text>
+
+    <rect x="861" y="150" width="257" height="110" rx="12" fill="#ffffff" stroke="#e4e7eb"/>
+    <text x="879" y="180" font-size="11" letter-spacing=".5" fill="#5b6470">RBAC ASSIGNMENTS</text>
+    <text x="879" y="220" font-size="30" font-weight="800" fill="#1b1f24">293</text>
+    <text x="879" y="244" font-size="12" fill="#b7791f">5 failing controls</text>
+  </g>
+
+  <!-- trend section -->
+  <text x="42" y="300" font-size="12" letter-spacing=".6" fill="#5b6470" font-weight="600">COMPLIANCE TREND</text>
+  <rect x="42" y="312" width="1076" height="300" rx="12" fill="#ffffff" stroke="#e4e7eb"/>
+
+  <!-- legend -->
+  <circle cx="906" cy="334" r="5" fill="#2d6cdf"/>
+  <text x="916" y="338" font-size="12" fill="#5b6470">Policy compliance</text>
+  <circle cx="1030" cy="334" r="5" fill="#1a7f4b"/>
+  <text x="1040" y="338" font-size="12" fill="#5b6470">Maester pass</text>
+
+  <!-- gridlines + y labels (0..100) -->
+  <g stroke="#eef0f3">
+    <line x1="102" y1="336" x2="1094" y2="336"/>
+    <line x1="102" y1="395" x2="1094" y2="395"/>
+    <line x1="102" y1="454" x2="1094" y2="454"/>
+    <line x1="102" y1="513" x2="1094" y2="513"/>
+    <line x1="102" y1="572" x2="1094" y2="572"/>
+  </g>
+  <g font-size="11" fill="#a2abb6" text-anchor="end">
+    <text x="90" y="340">100</text>
+    <text x="90" y="399">75</text>
+    <text x="90" y="458">50</text>
+    <text x="90" y="517">25</text>
+    <text x="90" y="576">0</text>
+  </g>
+
+  <!-- Maester line -->
+  <polyline points="102,383 350,371 598,364 846,360 1094,357" fill="none" stroke="#1a7f4b" stroke-width="2" opacity="0.85"/>
+  <!-- Policy compliance line -->
+  <polyline points="102,442 350,423 598,407 846,390 1094,374" fill="none" stroke="#2d6cdf" stroke-width="2.5"/>
+  <g fill="#2d6cdf">
+    <circle cx="102" cy="442" r="4"/><circle cx="350" cy="423" r="4"/><circle cx="598" cy="407" r="4"/><circle cx="846" cy="390" r="4"/><circle cx="1094" cy="374" r="4"/>
+  </g>
+
+  <!-- x labels -->
+  <g font-size="11" fill="#a2abb6" text-anchor="middle">
+    <text x="102" y="592">Jun 01</text>
+    <text x="350" y="592">Jun 16</text>
+    <text x="598" y="592">Jul 01</text>
+    <text x="846" y="592">Aug 01</text>
+    <text x="1094" y="592">Aug 17</text>
+  </g>
+</svg>
