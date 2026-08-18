@@ -25,6 +25,8 @@ auth:
   oidc_client_id: <web-app-registration-id>
   oidc_client_secret: "${OIDC_CLIENT_SECRET}"
   redirect_url: https://govlens.example.com/auth/callback
+  # random HMAC key that signs session cookies. Generate a long random value and keep
+  # it stable (rotating it logs everyone out):   openssl rand -base64 48
   session_secret: "${GOVLENS_SESSION_SECRET}"
   admin_emails:
     - you@example.com

@@ -155,7 +155,7 @@ auth:
   oidc_client_id: <span class="k">&lt;web-app-registration-id&gt;</span>
   oidc_client_secret: <span class="k">"${OIDC_CLIENT_SECRET}"</span>
   redirect_url: https://govlens.example.com/auth/callback
-  session_secret: <span class="k">"${GOVLENS_SESSION_SECRET}"</span>
+  session_secret: <span class="k">"${GOVLENS_SESSION_SECRET}"</span>   <span class="c"># openssl rand -base64 48 (keep stable)</span>
   admin_emails:
     - you@example.com
 
@@ -188,7 +188,7 @@ modules:
     <tr><td><code>auth.entra_tenant</code> / <code>oidc_issuer</code></td><td>Your tenant id (entra) or issuer URL (generic OIDC).</td></tr>
     <tr><td><code>auth.oidc_client_id/secret</code></td><td>The web sign-in app's credentials.</td></tr>
     <tr><td><code>auth.redirect_url</code></td><td>Must match the app registration's redirect URI.</td></tr>
-    <tr><td><code>auth.session_secret</code></td><td>Random string signing session cookies (required when auth is on).</td></tr>
+    <tr><td><code>auth.session_secret</code></td><td>Random HMAC key that signs GovLens's own session cookies (not your OIDC secret). Generate a long random value with <code>openssl rand -base64 48</code> and keep it stable; rotating it logs everyone out. Required when auth is on.</td></tr>
     <tr><td><code>auth.admin_emails</code></td><td>Bootstrap global admins (list).</td></tr>
     <tr><td><code>service_principals.{collector,remediator,grant}</code></td><td>Each: <code>app_id</code> + <code>cert</code> <i>or</i> <code>secret</code>. Grant also needs <code>root_scope</code>.</td></tr>
     <tr><td><code>modules.{…}.enabled / execute / interval</code></td><td>Toggle each worker; <code>execute:false</code> = dry-run; interval in seconds.</td></tr>
@@ -197,6 +197,9 @@ modules:
   <h2 id="secrets">Secrets: cert, secret, or ${ENV}</h2>
   <ul>
     <li><b>Per SP</b>: use either <code>cert:</code> (a file path, an inline PEM, or base64 PEM) or <code>secret:</code> (a client secret).</li>
+    <li><b>Session secret</b> (<code>auth.session_secret</code>): a random HMAC key GovLens uses to sign login
+    cookies. Generate one with <code>openssl rand -base64 48</code>, keep it stable (rotating it logs everyone
+    out), and use the same value across replicas so a session works on any instance.</li>
     <li><b>${ENV} interpolation</b>: any value may reference an environment variable, e.g.
     <code>dsn: "${DATABASE_URL}"</code> or <code>secret: "${GRANT_SECRET}"</code>. Missing vars become empty and
     validation fails fast with a clear message. Mix inline and env however you like.</li>
