@@ -116,12 +116,18 @@
   The role appears in Azure automatically once approved, and is revoked automatically when it expires.</div>
 
   <h2 id="requests">The Requests hub</h2>
-  <p><b>Requests</b> is the shared hub for both grant and revoke workflows. It has three parts:</p>
+  <p><b>Requests</b> is the shared hub for the grant, revoke, and out-of-band workflows. It has four parts:</p>
   <ul>
+    <li><b>Out-of-band changes</b>: access granted <b>directly in Azure</b> (portal, CLI, Terraform), not
+    through GovLens, detected as drift and surfaced here for review - each showing <b>who created it and when</b>.
+    <b>Approve</b> to keep it (leave the expiry blank to accept as-is, or set days to make it a governed,
+    auto-expiring grant); <b>Reject</b> to remove the live assignment. So every change, however it was made,
+    ends with an approver decision.</li>
     <li><b>Access requests - grants</b>: pending grant requests awaiting review.</li>
     <li><b>Revoke requests</b>: pending revocations awaiting review.</li>
-    <li><b>History</b>: every decided request (grants and revokes together, tagged by type) with a
-    step-by-step timeline, <b>search</b>, and <b>pagination</b> (20 per page).</li>
+    <li><b>History</b>: every decided request (grants, revokes, and out-of-band together, tagged by type) with a
+    step-by-step timeline, <b>search</b>, and <b>pagination</b> (20 per page). Approve or reject in <b>bulk</b>
+    with one shared note (and, for grants and out-of-band, one shared expiry).</li>
   </ul>
   <p><b>Who sees what</b> (visibility matrix): you always see your own requests; a
   <span class="pill p-approver">global approver</span>/<span class="pill p-admin">admin</span> sees everything;
@@ -129,8 +135,8 @@
   <div class="shot">
     <div class="chrome"><span class="dot" style="background:#f6584f"></span><span class="dot" style="background:#f6be3f"></span>
       <span class="dot" style="background:#2fbe57"></span><span class="url">https://govlens.example.com/requests</span></div>
-    <iframe src="screens/requests.html" style="height:760px" title="Requests hub" loading="lazy"></iframe>
-    <div class="cap"><b>Requests</b> - pending grant/revoke queues and the searchable, paginated history with lifecycle timelines.</div>
+    <iframe src="screens/requests.html" style="height:900px" title="Requests hub" loading="lazy"></iframe>
+    <div class="cap"><b>Requests</b> - out-of-band changes (with who/when created), pending grant/revoke queues, and the searchable, paginated history with lifecycle timelines.</div>
   </div>
 
   <h2 id="approve">Reviewing &amp; approving</h2>

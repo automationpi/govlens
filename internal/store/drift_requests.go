@@ -42,7 +42,10 @@ func (s *Store) ReconcileDrift(ctx context.Context, tenant string) (int, error) 
 		   role, scope, reason, requested_by, status)
 		SELECT $1, $2, 'drift', a.kind, a.ident,
 		       a.principal, a.principal_type, a.role, a.scope,
-		       'detected out-of-band (not requested through GovLens)', 'out-of-band', 'pending'
+		       'created '
+		         || COALESCE(to_char(a.created_on,'YYYY-MM-DD HH24:MI"Z"'), 'time unknown')
+		         || ' by ' || COALESCE(NULLIF(a.created_by_name,''), NULLIF(a.created_by,''), 'unresolved creator'),
+		       'out-of-band', 'pending'
 		  FROM assignments a
 		 WHERE a.run_id = $2
 		   AND a.kind = ANY($4)

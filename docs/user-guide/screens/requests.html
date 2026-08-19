@@ -180,6 +180,30 @@
   
 
   
+  <h2>Out-of-band changes <span class="sub">1 awaiting review · access changed directly, not through GovLens</span></h2>
+  <div class="card">
+    <div class="tablewrap"><table>
+      <thead><tr><th></th><th>Principal</th><th>Role / scope</th><th>Detected</th><th>Decision (approve = keep or set expiry · reject = remove)</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><input type="checkbox" aria-label="select change"></td>
+          <td>Jordan Lee<div class="dom">out-of-band · User</div></td>
+          <td>Storage Account Contributor<div class="sub"><code class="scope">/subscriptions/sub-test/resourceGroups/rg-example</code></div></td>
+          <td class="sub">Aug 19, 11:44 UTC<div>created 2026-08-19 11:25Z by unresolved creator</div></td>
+          <td>
+            <form method="post" action="/drift/decide" class="decide" style="flex-wrap:wrap;gap:6px">
+              <input type="number" name="days" min="1" placeholder="days" class="finput" style="max-width:70px" title="approve with an expiry (blank = keep)">
+              <label class="sub"><input type="checkbox" name="permanent"> keep</label>
+              <input type="text" name="note" placeholder="note" class="finput" style="max-width:130px">
+              <button name="decision" value="approve" class="fbtn" type="submit">Approve</button>
+              <button name="decision" value="reject" class="fbtn breject" type="submit">Reject</button>
+            </form>
+          </td>
+        </tr>
+      </tbody>
+    </table></div>
+  </div>
+
   <h2>Access requests — grants
     <span class="sub">1 pending · <a class="back" href="/request?tenant=example">+ request access</a></span></h2>
   <div class="card">

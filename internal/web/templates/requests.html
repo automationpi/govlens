@@ -31,7 +31,7 @@
           <td>{{if $.User.CanApprove .Scope}}<input type="checkbox" name="sel" value="{{.ID}}" form="driftbulk" aria-label="select change">{{end}}</td>
           <td>{{.Principal}}<div class="dom">out-of-band · {{.PrincipalType}}</div></td>
           <td>{{.Role}}<div class="sub"><code class="scope">{{.Scope}}</code></div></td>
-          <td class="sub">{{datetime .RequestedAt}}</td>
+          <td class="sub">{{datetime .RequestedAt}}<div>{{.Reason}}</div></td>
           <td>
             {{if $.User.CanApprove .Scope}}
             <form method="post" action="/drift/decide" class="decide" style="flex-wrap:wrap;gap:6px">

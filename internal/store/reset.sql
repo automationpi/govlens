@@ -1,6 +1,7 @@
 -- GovLens fresh-init: drops ONLY GovLens-owned tables (CASCADE for foreign keys),
 -- so a bring-your-own Postgres that also hosts other apps keeps their tables intact.
 -- Runs only when database.init = "fresh"; the schema is recreated immediately after.
+DROP TABLE IF EXISTS principal_activity CASCADE;
 DROP TABLE IF EXISTS admin_audit CASCADE;
 DROP TABLE IF EXISTS catalog_override CASCADE;
 DROP TABLE IF EXISTS grant_tier_policy CASCADE;

@@ -174,6 +174,10 @@ CREATE TABLE IF NOT EXISTS assignments (
 );
 CREATE INDEX IF NOT EXISTS idx_assign_run  ON assignments(run_id);
 CREATE INDEX IF NOT EXISTS idx_assign_kind ON assignments(kind, ident);
+-- Change attribution (RBAC): who created the assignment and when, from ARM properties.
+ALTER TABLE assignments ADD COLUMN IF NOT EXISTS created_on      TIMESTAMPTZ;
+ALTER TABLE assignments ADD COLUMN IF NOT EXISTS created_by      TEXT; -- creator object id
+ALTER TABLE assignments ADD COLUMN IF NOT EXISTS created_by_name TEXT; -- resolved name ('' = unresolved)
 
 -- ============================================================================
 -- Self-service access-request (grant) module — opt-in, off by default.
@@ -259,3 +263,14 @@ CREATE TABLE IF NOT EXISTS admin_audit (
     at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_admin_audit_tenant ON admin_audit(tenant, at DESC);
+
+-- Principal activity for dormancy / rightsizing (roadmap #2). Tenant-scoped, upserted
+-- each collection. last_sign_in is zero/NULL when never seen or when the collector
+-- lacks AuditLog.Read.All (the feature degrades to "unknown", not an error).
+CREATE TABLE IF NOT EXISTS principal_activity (
+    tenant       TEXT NOT NULL,
+    oid          TEXT NOT NULL,
+    last_sign_in TIMESTAMPTZ,
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (tenant, oid)
+);

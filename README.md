@@ -83,8 +83,9 @@ governance licensing or an enterprise IGA rollout, that is the gap GovLens fills
   many requests); grants are **time-bound and auto-revoked** by default
 - Revoking existing access follows the same **mark → approve → execute** flow
 - **Out-of-band changes** (access granted directly in the portal, not through GovLens) are detected
-  as drift and land in the **same review queue**: approve to keep (optionally with an expiry) or reject to
-  auto-remove, so every access change ends with an approver decision in one history
+  as drift and land in the **same review queue**, each showing **who created it and when**: approve to keep
+  (optionally with an expiry) or reject to auto-remove, so every access change ends with an approver decision
+  in one history
 - A full **audit trail** of who requested, approved, provisioned, and expired every grant
 
 ## Quickstart

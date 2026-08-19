@@ -162,6 +162,12 @@ func (c *Collector) Collect(ctx context.Context, opts Options) (store.RunData, e
 	// Resolve RBAC + directory-role principal names/types in one Graph batch.
 	c.resolvePrincipals(ctx, rd.Assignments)
 
+	// Dormancy (roadmap #2): last sign-in per principal. Degrades to nil without the
+	// AuditLog.Read.All permission, so this never blocks a collection.
+	if rd.Activity = c.signInActivity(ctx); len(rd.Activity) > 0 {
+		log.Printf("sign-in activity: captured for %d principal(s)", len(rd.Activity))
+	}
+
 	// Directory-role metrics + compliance findings (need resolved principal types).
 	if len(dirRoles) > 0 {
 		m, f := directoryRoleReview(rd.Assignments)
