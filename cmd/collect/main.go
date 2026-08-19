@@ -73,4 +73,11 @@ func main() {
 		log.Fatalf("store run: %v", err)
 	}
 	log.Printf("stored run #%d for %s (%s) at %s", id, rd.TenantDisplay, rd.Tenant, at.Format(time.RFC3339))
+
+	// Reconcile drift: turn any out-of-band role add into a pending review request.
+	if n, err := st.ReconcileDrift(ctx, rd.Tenant); err != nil {
+		log.Printf("drift reconcile: %v", err)
+	} else if n > 0 {
+		log.Printf("drift: %d out-of-band change(s) queued for review", n)
+	}
 }

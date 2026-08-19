@@ -181,6 +181,7 @@ type requestsData struct {
 	Tenants        []store.TenantInfo
 	PendingGrants  []store.RevokeRequest
 	PendingRevokes []store.RevokeRequest
+	PendingDrift   []store.RevokeRequest // out-of-band changes awaiting review
 	History        []store.RevokeRequest // combined grant+revoke, paginated + visibility-filtered
 	GrantLive      bool
 	Actors         []actorRef // legend for the handles shown in timelines
@@ -262,6 +263,13 @@ func (s *Server) requestsPage(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	if pd, _ := s.store.DriftRequests(ctx, tenant, "pending"); pd != nil {
+		for _, dr := range pd {
+			if canSeeRequest(u, dr) {
+				d.PendingDrift = append(d.PendingDrift, dr)
+			}
+		}
+	}
 
 	// History: visibility-filtered, searchable, paginated (in SQL).
 	d.Page = 1
@@ -309,6 +317,9 @@ func (s *Server) requestsPage(w http.ResponseWriter, r *http.Request) {
 		addActor(r.RequestedBy)
 	}
 	for _, r := range d.PendingRevokes {
+		addActor(r.RequestedBy)
+	}
+	for _, r := range d.PendingDrift {
 		addActor(r.RequestedBy)
 	}
 	for _, r := range d.History {

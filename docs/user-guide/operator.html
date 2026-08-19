@@ -30,6 +30,7 @@
   <h4>Go live</h4>
   <a href="#bootstrap">First run</a>
   <a href="#enable">Enabling self-service</a>
+  <a href="#drift">Out-of-band review</a>
   <h4>Operate</h4>
   <a href="#ops">Day-2 operations</a>
   <a href="#rotate">Rotating credentials</a>
@@ -262,6 +263,20 @@ modules:
     <iframe src="screens/admin.html" style="height:820px" title="Admin - enablement" loading="lazy"></iframe>
     <div class="cap"><b>Admin</b> - the enablement gates, grant SP + readiness probe, tier policy, guardrails, and subscription opt-in.</div>
   </div>
+
+  <h2 id="drift">Out-of-band change review</h2>
+  <p>Every collection compares the two latest snapshots. A role assignment that appeared <b>without</b> a
+  matching GovLens request (someone granted it directly in the portal, CLI, or Terraform) is materialized as
+  a pending <b>out-of-band change</b> at the top of the Requests hub. An approver decides, same as any request:</p>
+  <ul>
+    <li><b>Approve</b> keeps the access. Leave the expiry blank to accept it as-is, or set days to pull it into
+    governance as a time-bound, auto-expiring grant.</li>
+    <li><b>Reject</b> queues the assignment for removal by the remediator (so this needs the remediator's
+    delete permission for that kind - RBAC or Entra directory roles).</li>
+  </ul>
+  <p>The result is one history where <i>every</i> access change - requested, revoked, or out-of-band - carries
+  an approver decision. Detection is idempotent (GovLens's own grants are never flagged) and source-aware (a
+  collector that skipped a run is suppressed, not treated as a mass change).</p>
 
   <h2 id="ops">Day-2 operations</h2>
   <ul>

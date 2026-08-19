@@ -87,6 +87,7 @@ func (s *Server) Routes() http.Handler {
 	s.apiRoutes(mux)
 	s.revokeRoutes(mux)
 	s.grantRoutes(mux)
+	s.driftRoutes(mux)
 	mux.HandleFunc("/run", s.runDetail)
 	mux.HandleFunc("/", s.dashboard)
 	return s.authMiddleware(mux)

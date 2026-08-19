@@ -55,8 +55,11 @@ type TimelineStep struct {
 // (e.g. a ticket, a notification, a second-level sign-off) append a step here and
 // every request page renders it automatically — no template change needed.
 func (r RevokeRequest) Timeline() []TimelineStep {
-	if r.Action == "grant" {
+	switch r.Action {
+	case "grant":
 		return r.grantTimeline()
+	case "drift":
+		return r.driftTimeline()
 	}
 	steps := []TimelineStep{{
 		Label: "Requested", Actor: r.RequestedBy, At: r.RequestedAt,

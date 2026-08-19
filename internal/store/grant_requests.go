@@ -224,7 +224,7 @@ func (s *Store) SetGrantProvisioned(ctx context.Context, id int64, assignmentIde
 func (s *Store) ExpiredGrants(ctx context.Context) ([]RevokeRequest, error) {
 	rows, err := s.Pool.Query(ctx,
 		`SELECT `+grantCols+` FROM access_requests
-		  WHERE action='grant' AND status='granted' AND expires_at IS NOT NULL AND expires_at < now()
+		  WHERE action IN ('grant','drift') AND status='granted' AND expires_at IS NOT NULL AND expires_at < now()
 		  ORDER BY id`)
 	if err != nil {
 		return nil, err

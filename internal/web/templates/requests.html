@@ -20,6 +20,47 @@
 
   {{if .Notice}}<div class="warn-banner">{{.Notice}}</div>{{end}}
 
+  {{if .PendingDrift}}
+  <h2>Out-of-band changes <span class="sub">{{len .PendingDrift}} awaiting review · access changed directly, not through GovLens</span></h2>
+  <div class="card">
+    <div class="tablewrap"><table>
+      <thead><tr><th></th><th>Principal</th><th>Role / scope</th><th>Detected</th><th>Decision (approve = keep or set expiry · reject = remove)</th></tr></thead>
+      <tbody>
+      {{range .PendingDrift}}
+        <tr>
+          <td>{{if $.User.CanApprove .Scope}}<input type="checkbox" name="sel" value="{{.ID}}" form="driftbulk" aria-label="select change">{{end}}</td>
+          <td>{{.Principal}}<div class="dom">out-of-band · {{.PrincipalType}}</div></td>
+          <td>{{.Role}}<div class="sub"><code class="scope">{{.Scope}}</code></div></td>
+          <td class="sub">{{datetime .RequestedAt}}</td>
+          <td>
+            {{if $.User.CanApprove .Scope}}
+            <form method="post" action="/drift/decide" class="decide" style="flex-wrap:wrap;gap:6px">
+              <input type="hidden" name="id" value="{{.ID}}">
+              <input type="hidden" name="tenant" value="{{$.Tenant}}">
+              <input type="number" name="days" min="1" placeholder="days" class="finput" style="max-width:70px" title="approve with an expiry (blank = keep, no expiry)">
+              <label class="sub"><input type="checkbox" name="permanent"> keep</label>
+              <input type="text" name="note" placeholder="note" class="finput" style="max-width:130px">
+              <button name="decision" value="approve" class="fbtn" type="submit">Approve</button>
+              <button name="decision" value="reject" class="fbtn breject" type="submit">Reject</button>
+            </form>
+            {{else}}<span class="sub">awaiting approver</span>{{end}}
+          </td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table></div>
+    <form id="driftbulk" method="post" action="/drift/decide-bulk" class="decide" style="flex-wrap:wrap;gap:6px;margin-top:10px">
+      <input type="hidden" name="tenant" value="{{.Tenant}}">
+      <span class="sub">Checked rows, one note &amp; expiry (blank days = keep):</span>
+      <input type="number" name="days" min="1" placeholder="days" class="finput" style="max-width:70px" title="approve with an expiry for all selected">
+      <label class="sub"><input type="checkbox" name="permanent"> keep</label>
+      <input type="text" name="note" placeholder="one note for all selected" class="finput" style="max-width:200px">
+      <button name="decision" value="approve" class="fbtn" type="submit">Approve selected</button>
+      <button name="decision" value="reject" class="fbtn breject" type="submit">Reject selected</button>
+    </form>
+  </div>
+  {{end}}
+
   {{if or .PendingGrants .GrantLive}}
   <h2>Access requests — grants
     <span class="sub">{{len .PendingGrants}} pending{{if .GrantLive}} · <a class="back" href="/request?tenant={{.Tenant}}">+ request access</a>{{end}}</span></h2>
@@ -115,7 +156,7 @@
       <tbody>
       {{range .History}}
         <tr>
-          <td><span class="badge b-{{if eq .Action "grant"}}approved{{else}}removed{{end}}">{{.Action}}</span></td>
+          <td><span class="badge b-{{if eq .Action "grant"}}approved{{else if eq .Action "drift"}}changed{{else}}removed{{end}}">{{if eq .Action "drift"}}out-of-band{{else}}{{.Action}}{{end}}</span></td>
           <td>{{.Principal}}<div class="dom">{{.Kind}}</div></td>
           <td>{{.Role}}<div class="sub"><code class="scope">{{.Scope}}</code></div></td>
           <td><span class="badge b-{{.Status}}">{{.Status}}</span></td>
@@ -163,7 +204,7 @@
 // On the grant-approval forms, hide the "days" field when "permanent" is checked —
 // a permanent grant has no expiry, so a day count would be contradictory.
 (function () {
-  document.querySelectorAll('form[action^="/grant/decide"]').forEach(function (f) {
+  document.querySelectorAll('form[action^="/grant/decide"], form[action^="/drift/decide"]').forEach(function (f) {
     var perm = f.querySelector('input[name="permanent"]');
     var days = f.querySelector('input[name="days"]');
     if (!perm || !days) return;
