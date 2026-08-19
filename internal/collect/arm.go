@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/automationpi/govlens/internal/store"
 )
@@ -70,10 +71,12 @@ func (c *Collector) roleAssignments(ctx context.Context, sub subscription) ([]st
 		var a struct {
 			ID         string `json:"id"`
 			Properties struct {
-				RoleDefinitionID string `json:"roleDefinitionId"`
-				PrincipalID      string `json:"principalId"`
-				PrincipalType    string `json:"principalType"`
-				Scope            string `json:"scope"`
+				RoleDefinitionID string    `json:"roleDefinitionId"`
+				PrincipalID      string    `json:"principalId"`
+				PrincipalType    string    `json:"principalType"`
+				Scope            string    `json:"scope"`
+				CreatedOn        time.Time `json:"createdOn"`
+				CreatedBy        string    `json:"createdBy"`
 			} `json:"properties"`
 		}
 		_ = json.Unmarshal(r, &a)
@@ -86,8 +89,13 @@ func (c *Collector) roleAssignments(ctx context.Context, sub subscription) ([]st
 			PrincipalType: a.Properties.PrincipalType,
 			Role:          role,
 			Scope:         a.Properties.Scope,
+			CreatedOn:     a.Properties.CreatedOn,
+			CreatedBy:     a.Properties.CreatedBy,
 		})
 		c.principalIDs[a.Properties.PrincipalID] = struct{}{}
+		if a.Properties.CreatedBy != "" {
+			c.principalIDs[a.Properties.CreatedBy] = struct{}{} // resolve the creator too
+		}
 	}
 	return out, nil
 }

@@ -267,7 +267,9 @@ modules:
   <h2 id="drift">Out-of-band change review</h2>
   <p>Every collection compares the two latest snapshots. A role assignment that appeared <b>without</b> a
   matching GovLens request (someone granted it directly in the portal, CLI, or Terraform) is materialized as
-  a pending <b>out-of-band change</b> at the top of the Requests hub. An approver decides, same as any request:</p>
+  a pending <b>out-of-band change</b> at the top of the Requests hub, showing <b>who created the assignment
+  and when</b> (from the assignment's own metadata; an unresolved creator is flagged as a signal, not hidden).
+  An approver decides, same as any request:</p>
   <ul>
     <li><b>Approve</b> keeps the access. Leave the expiry blank to accept it as-is, or set days to pull it into
     governance as a time-bound, auto-expiring grant.</li>

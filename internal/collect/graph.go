@@ -5,7 +5,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"log"
 	"strings"
+	"time"
 
 	"github.com/automationpi/govlens/internal/store"
 )
@@ -200,4 +202,58 @@ func (c *Collector) resolvePrincipals(ctx context.Context, assigns []store.Assig
 		}
 		assigns[i].Display = assigns[i].Principal + " — " + assigns[i].Role
 	}
+	// Change attribution: resolve each RBAC assignment's creator id to a name; leave it
+	// empty when the creator does not resolve (deleted / external / unreadable) so the
+	// UI can flag "unresolved creator" as a signal.
+	for i := range assigns {
+		if assigns[i].CreatedBy != "" {
+			assigns[i].CreatedByName = names[assigns[i].CreatedBy]
+		}
+	}
+}
+
+// signInActivity fetches last sign-in for the principals we see holding access
+// (users only). It needs Graph AuditLog.Read.All (+ Entra P1); on any error - most
+// commonly a 403 when the permission is not granted - it returns nil and logs, so
+// collection degrades to "activity unknown" rather than failing. Feeds dormancy
+// analysis (roadmap #2).
+func (c *Collector) signInActivity(ctx context.Context) []store.PrincipalActivity {
+	if c.pseudonymize {
+		return nil
+	}
+	var out []store.PrincipalActivity
+	url := graphBase + "/users?$select=id,signInActivity&$top=999"
+	for url != "" {
+		var page struct {
+			Value []struct {
+				ID             string `json:"id"`
+				SignInActivity *struct {
+					LastSignIn         *time.Time `json:"lastSignInDateTime"`
+					LastNonInteractive *time.Time `json:"lastNonInteractiveSignInDateTime"`
+				} `json:"signInActivity"`
+			} `json:"value"`
+			Next string `json:"@odata.nextLink"`
+		}
+		if err := getJSON(ctx, c.graph, url, &page); err != nil {
+			log.Printf("sign-in activity unavailable (needs Graph AuditLog.Read.All + Entra P1): %v", err)
+			return nil
+		}
+		for _, u := range page.Value {
+			if _, ok := c.principalIDs[u.ID]; !ok {
+				continue // only principals we actually see holding access
+			}
+			var last time.Time
+			if u.SignInActivity != nil {
+				if u.SignInActivity.LastSignIn != nil {
+					last = *u.SignInActivity.LastSignIn
+				}
+				if u.SignInActivity.LastNonInteractive != nil && u.SignInActivity.LastNonInteractive.After(last) {
+					last = *u.SignInActivity.LastNonInteractive
+				}
+			}
+			out = append(out, store.PrincipalActivity{OID: u.ID, LastSignIn: last})
+		}
+		url = page.Next
+	}
+	return out
 }

@@ -37,3 +37,6 @@ bin/
 realrun/
 realrun2/
 third_party/
+
+# internal roadmap (not shipped)
+ROADMAP.md

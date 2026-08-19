@@ -88,7 +88,15 @@ type RunData struct {
 	Metrics        []Metric
 	Findings       []Finding
 	Assignments    []Assignment
-	Catalog        []CatalogRole // grantable role definitions discovered this run (tenant-scoped upsert)
+	Catalog        []CatalogRole       // grantable role definitions discovered this run (tenant-scoped upsert)
+	Activity       []PrincipalActivity // last sign-in per principal for dormancy (roadmap #2)
+}
+
+// PrincipalActivity is a principal's last observed sign-in, for dormancy analysis.
+// LastSignIn is zero when never seen or when sign-in data is unavailable.
+type PrincipalActivity struct {
+	OID        string
+	LastSignIn time.Time
 }
 
 // ResourceGroup is one resource group under a subscription (for request scoping).
@@ -155,13 +163,37 @@ func (s *Store) ReplaceRun(ctx context.Context, rd RunData) (int64, error) {
 			continue
 		}
 		seen[k] = true
+		var createdOn any
+		if !a.CreatedOn.IsZero() {
+			createdOn = a.CreatedOn
+		}
 		assignRows = append(assignRows, []any{id, a.Domain, a.Kind, a.Ident,
-			a.Principal, a.PrincipalType, a.Role, a.Scope, a.Display})
+			a.Principal, a.PrincipalType, a.Role, a.Scope, a.Display,
+			createdOn, a.CreatedBy, a.CreatedByName})
 	}
 	if _, err := tx.CopyFrom(ctx, pgx.Identifier{"assignments"},
-		[]string{"run_id", "domain", "kind", "ident", "principal", "principal_type", "role", "scope", "display"},
+		[]string{"run_id", "domain", "kind", "ident", "principal", "principal_type", "role", "scope", "display",
+			"created_on", "created_by", "created_by_name"},
 		pgx.CopyFromRows(assignRows)); err != nil {
 		return 0, fmt.Errorf("copy assignments: %w", err)
+	}
+
+	// Upsert principal activity (tenant-scoped) for dormancy analysis.
+	for _, pa := range rd.Activity {
+		if pa.OID == "" {
+			continue
+		}
+		var last any
+		if !pa.LastSignIn.IsZero() {
+			last = pa.LastSignIn
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO principal_activity (tenant, oid, last_sign_in, updated_at)
+			VALUES ($1,$2,$3,now())
+			ON CONFLICT (tenant, oid) DO UPDATE SET last_sign_in=EXCLUDED.last_sign_in, updated_at=now()`,
+			rd.Tenant, pa.OID, last); err != nil {
+			return 0, fmt.Errorf("upsert activity: %w", err)
+		}
 	}
 
 	for _, sub := range rd.Subscriptions {
@@ -227,4 +259,11 @@ type Finding struct {
 
 type Assignment struct {
 	Domain, Kind, Ident, Principal, PrincipalType, Role, Scope, Display string
+	// Change attribution (RBAC only, from the assignment's ARM properties): when the
+	// assignment was created and by whom. CreatedBy is an object id; CreatedByName is
+	// the resolved display name, left empty when the creator does not resolve (deleted,
+	// external, or unreadable) which is itself a signal.
+	CreatedOn     time.Time
+	CreatedBy     string
+	CreatedByName string
 }
