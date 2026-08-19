@@ -30,6 +30,11 @@ type Tenant struct {
 
 type Database struct {
 	DSN string `yaml:"dsn"` // bring-your-own Postgres connection string (required)
+	// Init controls bootstrap behavior against an EXISTING database:
+	//   "reuse" (default) - apply the schema idempotently, keep all existing data.
+	//   "fresh"           - drop GovLens's tables first, then recreate (explicit wipe).
+	// Empty means reuse, so a new image never destroys data unless you opt in.
+	Init string `yaml:"init"`
 }
 
 type Server struct {
@@ -137,6 +142,11 @@ func (c *Config) applyDefaults() {
 func (c *Config) validate() error {
 	if strings.TrimSpace(c.Database.DSN) == "" {
 		return fmt.Errorf("database.dsn is required (GovLens uses your own Postgres)")
+	}
+	switch c.Database.Init {
+	case "", "reuse", "fresh":
+	default:
+		return fmt.Errorf("database.init must be 'reuse' or 'fresh', got %q", c.Database.Init)
 	}
 	switch c.Auth.Mode {
 	case "off", "dev":

@@ -145,6 +145,7 @@ tenant:
 database:
   <span class="c"># Bring your own Postgres; GovLens creates its own schema on first start.</span>
   dsn: <span class="k">"${DATABASE_URL}"</span>          <span class="c"># postgres://user:pass@host:5432/govlens?sslmode=require</span>
+  init: reuse                     <span class="c"># reuse (default, keeps data) | fresh (drops+recreates GovLens tables)</span>
 
 server:
   addr: <span class="k">":8080"</span>
@@ -226,6 +227,10 @@ modules:
   <ul>
     <li>Point <code>database.dsn</code> at any reachable Postgres. Schema is created/migrated automatically on
     start (additive, idempotent) - upgrades need no manual migration.</li>
+    <li><b>Your data is never overwritten on upgrade.</b> <code>database.init</code> defaults to
+    <code>reuse</code>: a new image (or restart) re-applies the schema idempotently and keeps every row.
+    Set <code>init: fresh</code> only when you deliberately want a clean start - it drops GovLens's own tables
+    (and nothing else, so a shared Postgres keeps other apps' tables) and recreates them.</li>
     <li>The <code>access_requests</code> table is your <b>audit trail</b> (who requested/approved/provisioned/expired).
     Back it up and retain per your policy.</li>
     <li>Use TLS to the database (<code>sslmode=require</code>) in production.</li>
@@ -286,6 +291,8 @@ modules:
     <li>Pull the new image tag.</li>
     <li>Recreate the container with the same config and volumes.</li>
     <li>Schema changes apply automatically on start (additive). No manual migration.</li>
+    <li><b>Your data is preserved</b> - with the default <code>database.init: reuse</code>, a new image never
+    drops or recreates data; it only adds any missing tables/columns. (Only <code>init: fresh</code> wipes.)</li>
   </ol>
 
   <h2 id="hardening">Hardening</h2>

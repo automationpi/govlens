@@ -97,14 +97,14 @@ const assignmentFilter = `run_id=$1 AND ($2='' OR kind=$2)
 
 // RunAssignments returns a run's assignments, filtered by kind, principal type,
 // free-text search, and subscription id. Empty filter args match everything.
-func (s *Store) RunAssignments(ctx context.Context, runID int64, kind, ptype, search, sub string, limit int) ([]AssignmentRow, error) {
+func (s *Store) RunAssignments(ctx context.Context, runID int64, kind, ptype, search, sub string, limit, offset int) ([]AssignmentRow, error) {
 	rows, err := s.Pool.Query(ctx, `
 		SELECT ident, kind, COALESCE(principal,''), COALESCE(principal_type,''),
 		       COALESCE(role,''), COALESCE(scope,''), COALESCE(display,'')
 		  FROM assignments
 		 WHERE `+assignmentFilter+`
 		 ORDER BY kind, display, role
-		 LIMIT $6`, runID, kind, ptype, search, sub, limit)
+		 LIMIT $6 OFFSET $7`, runID, kind, ptype, search, sub, limit, offset)
 	if err != nil {
 		return nil, err
 	}

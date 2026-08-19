@@ -79,7 +79,8 @@ governance licensing or an enterprise IGA rollout, that is the gap GovLens fills
 **🔑 Reviewed access lifecycle**: a guided self-service workflow, least-privilege by design:
 - Users **request** access from a 4-step wizard (where → how much → how long → why) that hides Azure's
   hundreds of roles behind plain **Read-only / Contribute / Admin** levels
-- Approvers **review** and set an expiry; grants are **time-bound and auto-revoked** by default
+- Approvers **review** and set an expiry, individually or in **bulk** (one shared note and expiry across
+  many requests); grants are **time-bound and auto-revoked** by default
 - Revoking existing access follows the same **mark → approve → execute** flow
 - A full **audit trail** of who requested, approved, provisioned, and expired every grant
 
@@ -129,7 +130,8 @@ Each service principal authenticates with a **certificate or a client secret**: 
 - **Fail-closed everywhere**: self-service won't go live until every enablement gate is green;
   unknown roles are treated as privileged; a stale SP verification closes the module
 - **Time-bound by default**: grants expire and are auto-revoked; "permanent" is a policy-gated exception
-- **Bring your own database**: GovLens never manages one; point it at your Postgres via a connection string
+- **Bring your own database**: GovLens never manages one; point it at your Postgres via a connection string.
+  A new image **reuses your data by default** (`database.init: reuse`) and never wipes it; a clean start is opt-in
 
 ## Development
 

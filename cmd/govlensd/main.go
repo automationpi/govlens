@@ -37,13 +37,27 @@ func main() {
 
 	// Apply the schema once up front so the children don't race on CREATE.
 	mctx, mcancel := context.WithTimeout(context.Background(), 60*time.Second)
+	// database.init: "reuse" (default) keeps existing data; "fresh" wipes GovLens
+	// tables first. Reset runs ONLY here in the launcher, before any child starts.
+	initMode := cfg.Database.Init
+	if initMode == "" {
+		initMode = "reuse"
+	}
+	if initMode == "fresh" {
+		if err := store.Reset(mctx, cfg.Database.DSN); err != nil {
+			mcancel()
+			log.Fatalf("database reset (init=fresh): %v", err)
+		}
+		log.Printf("govlens: database init=fresh — dropped existing GovLens tables")
+	}
 	st, err := store.Open(mctx, cfg.Database.DSN)
 	mcancel()
 	if err != nil {
 		log.Fatalf("database: %v", err)
 	}
 	st.Close()
-	log.Printf("govlens: schema ready")
+	log.Printf("govlens: schema ready (init=%s — existing data %s)", initMode,
+		map[string]string{"reuse": "preserved", "fresh": "wiped"}[initMode])
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()

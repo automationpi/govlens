@@ -26,10 +26,11 @@
   <div class="card">
     {{if .PendingGrants}}
     <div class="tablewrap"><table>
-      <thead><tr><th>Target</th><th>Role / scope</th><th>Requested</th><th>Decision (set expiry)</th></tr></thead>
+      <thead><tr><th></th><th>Target</th><th>Role / scope</th><th>Requested</th><th>Decision (set expiry)</th></tr></thead>
       <tbody>
       {{range .PendingGrants}}
         <tr>
+          <td>{{if $.User.CanApprove .Scope}}<input type="checkbox" name="sel" value="{{.ID}}" form="grantbulk" aria-label="select request">{{end}}</td>
           <td>{{.Principal}}<div class="dom">grant · {{.PrincipalType}}</div></td>
           <td>{{.Role}}<div class="sub"><code class="scope">{{.Scope}}</code></div></td>
           <td class="sub">{{.RequestedBy}}<div>{{date .RequestedAt}}{{if .RequestedPermanent}} · asked <strong>no expiry</strong>{{else if .RequestedDays}} · asked {{.RequestedDays}}d{{end}}</div></td>
@@ -50,6 +51,15 @@
       {{end}}
       </tbody>
     </table></div>
+    <form id="grantbulk" method="post" action="/grant/decide-bulk" class="decide" style="flex-wrap:wrap;gap:6px;margin-top:10px">
+      <input type="hidden" name="tenant" value="{{.Tenant}}">
+      <span class="sub">Checked rows, one note &amp; expiry:</span>
+      <input type="number" name="days" min="1" value="30" class="finput" style="max-width:70px" title="expiry in days for all selected">
+      <label class="sub"><input type="checkbox" name="permanent"> permanent</label>
+      <input type="text" name="note" placeholder="one note for all selected" class="finput" style="max-width:200px">
+      <button name="decision" value="approve" class="fbtn" type="submit">Approve selected</button>
+      <button name="decision" value="reject" class="fbtn breject" type="submit">Reject selected</button>
+    </form>
     {{else}}<div class="empty">No grant requests awaiting review.{{if .GrantLive}} <a class="back" href="/request?tenant={{.Tenant}}">Request access →</a>{{end}}</div>{{end}}
   </div>
   {{end}}
@@ -58,10 +68,11 @@
   <div class="card">
     {{if .PendingRevokes}}
     <div class="tablewrap"><table>
-      <thead><tr><th>Target</th><th>Role / scope</th><th>Requested</th><th>Decision</th></tr></thead>
+      <thead><tr><th></th><th>Target</th><th>Role / scope</th><th>Requested</th><th>Decision</th></tr></thead>
       <tbody>
       {{range .PendingRevokes}}
         <tr>
+          <td>{{if $.User.CanApprove .Scope}}<input type="checkbox" name="sel" value="{{.ID}}" form="revokebulk" aria-label="select request">{{end}}</td>
           <td>{{.Principal}}<div class="dom">{{.Kind}}{{if .PrincipalType}} · {{.PrincipalType}}{{end}}</div></td>
           <td>{{.Role}}<div class="sub"><code class="scope">{{.Scope}}</code></div></td>
           <td class="sub">{{.RequestedBy}}<div>{{date .RequestedAt}}</div></td>
@@ -80,6 +91,13 @@
       {{end}}
       </tbody>
     </table></div>
+    <form id="revokebulk" method="post" action="/revoke/decide-bulk" class="decide" style="flex-wrap:wrap;gap:6px;margin-top:10px">
+      <input type="hidden" name="tenant" value="{{.Tenant}}">
+      <span class="sub">Checked rows, one note:</span>
+      <input type="text" name="note" placeholder="one note for all selected" class="finput" style="max-width:200px">
+      <button name="decision" value="approve" class="fbtn" type="submit">Approve selected</button>
+      <button name="decision" value="reject" class="fbtn breject" type="submit">Reject selected</button>
+    </form>
     {{else}}<div class="empty">Nothing awaiting review. Mark assignments from a run's detail page.</div>{{end}}
   </div>
 
@@ -145,7 +163,7 @@
 // On the grant-approval forms, hide the "days" field when "permanent" is checked —
 // a permanent grant has no expiry, so a day count would be contradictory.
 (function () {
-  document.querySelectorAll('form[action="/grant/decide"]').forEach(function (f) {
+  document.querySelectorAll('form[action^="/grant/decide"]').forEach(function (f) {
     var perm = f.querySelector('input[name="permanent"]');
     var days = f.querySelector('input[name="days"]');
     if (!perm || !days) return;

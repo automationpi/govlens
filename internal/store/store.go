@@ -14,6 +14,27 @@ import (
 //go:embed schema.sql
 var schemaSQL string
 
+//go:embed reset.sql
+var resetSQL string
+
+// Reset drops all GovLens-owned tables (only ours, so a shared Postgres keeps its
+// other tables). Used for database.init="fresh"; the caller re-applies the schema
+// afterwards via Open. This DESTROYS all GovLens data, so it is opt-in only.
+func Reset(ctx context.Context, dsn string) error {
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		return fmt.Errorf("connect postgres: %w", err)
+	}
+	defer pool.Close()
+	if err := pool.Ping(ctx); err != nil {
+		return fmt.Errorf("ping postgres: %w", err)
+	}
+	if _, err := pool.Exec(ctx, resetSQL); err != nil {
+		return fmt.Errorf("reset schema: %w", err)
+	}
+	return nil
+}
+
 type Store struct{ Pool *pgxpool.Pool }
 
 // Open connects (with a short retry loop so it survives Postgres still booting

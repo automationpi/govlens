@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -18,6 +19,7 @@ func (s *Server) grantRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/request", s.requestPage)
 	mux.HandleFunc("/request/submit", s.requestSubmit)
 	mux.HandleFunc("/grant/decide", s.grantDecide)
+	mux.HandleFunc("/grant/decide-bulk", s.grantDecideBulk)
 }
 
 type scopeOption struct {
@@ -245,63 +247,128 @@ func (s *Server) grantDecide(w http.ResponseWriter, r *http.Request) {
 	tenant := r.FormValue("tenant")
 	approve := r.FormValue("decision") == "approve"
 	note := r.FormValue("note")
-	back := func(msg string) { http.Redirect(w, r, "/requests?tenant="+url.QueryEscape(tenant)+"&err="+url.QueryEscape(msg), http.StatusSeeOther) }
+	days := atoiSafe(r.FormValue("days"))
+	permanent := r.FormValue("permanent") == "on"
 
-	req, err := s.store.GetAccessRequest(ctx, id)
-	if err != nil || req.Action != "grant" {
-		back("Grant request not found.")
+	outcome, reason := s.applyGrantDecision(ctx, u, id, approve, note, days, permanent)
+	dest := "/requests?tenant=" + url.QueryEscape(tenant)
+	if outcome == "skipped" {
+		dest += "&err=" + url.QueryEscape(reason)
+	}
+	http.Redirect(w, r, dest, http.StatusSeeOther)
+}
+
+// grantDecideBulk applies one decision (approve/reject) with a single note and a
+// single expiry to every selected grant request. Each request is authorized and
+// expiry-clamped against its own tier, so a batch may safely span tiers; any that
+// can't be applied (wrong scope, permanent-not-allowed) are skipped and summarized.
+func (s *Server) grantDecideBulk(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
 		return
 	}
-	tp := s.tierPolicyFor(ctx, tenant, req.RoleDefID)
+	u := userOf(r)
+	if u == nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	ctx := r.Context()
+	_ = r.ParseForm()
+	tenant := r.FormValue("tenant")
+	approve := r.FormValue("decision") == "approve"
+	note := r.FormValue("note")
+	days := atoiSafe(r.FormValue("days"))
+	permanent := r.FormValue("permanent") == "on"
+
+	var approved, rejected int
+	skips := map[string]int{}
+	for _, sid := range r.Form["sel"] {
+		id, err := strconv.ParseInt(sid, 10, 64)
+		if err != nil {
+			continue
+		}
+		switch outcome, reason := s.applyGrantDecision(ctx, u, id, approve, note, days, permanent); outcome {
+		case "approved":
+			approved++
+		case "rejected":
+			rejected++
+		default:
+			skips[reason]++
+		}
+	}
+	http.Redirect(w, r, "/requests?tenant="+url.QueryEscape(tenant)+"&err="+url.QueryEscape(bulkSummary(approved, rejected, skips)), http.StatusSeeOther)
+}
+
+// applyGrantDecision authorizes and applies a single grant decision, clamping the
+// expiry to the request's tier. It writes nothing to the response — it returns a
+// one-word outcome ("approved"/"rejected"/"skipped") and, when skipped, a reason.
+func (s *Server) applyGrantDecision(ctx context.Context, u *auth.User, id int64, approve bool, note string, days int, permanent bool) (outcome, reason string) {
+	req, err := s.store.GetAccessRequest(ctx, id)
+	if err != nil || req.Action != "grant" {
+		return "skipped", "not found"
+	}
+	tp := s.tierPolicyFor(ctx, req.Tenant, req.RoleDefID)
 
 	// Authorization: a 'global' approver tier requires a global approver; otherwise
 	// the scope's approver may decide.
 	if tp.ApproverTier == "global" {
 		if !u.IsApprover() {
-			back("This role requires a global approver.")
-			return
+			return "skipped", "needs global approver"
 		}
 	} else if !u.CanApprove(req.Scope) {
-		back("You may not approve requests for that scope.")
-		return
+		return "skipped", "not your scope"
 	}
 
 	if !approve {
 		if err := s.store.DecideGrantRequest(ctx, id, false, u.Email, note, nil); err != nil {
-			back(err.Error())
-			return
+			return "skipped", err.Error()
 		}
-		http.Redirect(w, r, "/requests?tenant="+url.QueryEscape(tenant), http.StatusSeeOther)
-		return
+		return "rejected", ""
 	}
 
 	// Approve — compute expiry from the approver's choice within tier bounds.
 	var expiresAt *time.Time
-	permanent := r.FormValue("permanent") == "on"
 	if permanent {
 		if !tp.AllowPermanent {
-			back("Permanent grants aren't allowed for this role's tier — set an expiry.")
-			return
+			return "skipped", "permanent not allowed for tier"
 		}
 	} else {
-		days := atoiSafe(r.FormValue("days"))
-		if days <= 0 {
-			days = tp.DefaultDays
+		d := days
+		if d <= 0 {
+			d = tp.DefaultDays
 		}
-		if days <= 0 {
-			days = 30
+		if d <= 0 {
+			d = 30
 		}
-		if tp.MaxDays > 0 && days > tp.MaxDays {
-			days = tp.MaxDays
+		if tp.MaxDays > 0 && d > tp.MaxDays {
+			d = tp.MaxDays
 		}
-		t := time.Now().Add(time.Duration(days) * 24 * time.Hour)
+		t := time.Now().Add(time.Duration(d) * 24 * time.Hour)
 		expiresAt = &t
 	}
 	if err := s.store.DecideGrantRequest(ctx, id, true, u.Email, note, expiresAt); err != nil {
-		back(err.Error())
-		return
+		return "skipped", err.Error()
 	}
-	http.Redirect(w, r, "/requests?tenant="+url.QueryEscape(tenant), http.StatusSeeOther)
+	return "approved", ""
+}
+
+// bulkSummary renders a short one-line result for a bulk decision, shown in the
+// requests-page notice banner (e.g. "approved 7, skipped 2 (not your scope)").
+func bulkSummary(approved, rejected int, skips map[string]int) string {
+	var parts []string
+	if approved > 0 {
+		parts = append(parts, fmt.Sprintf("approved %d", approved))
+	}
+	if rejected > 0 {
+		parts = append(parts, fmt.Sprintf("rejected %d", rejected))
+	}
+	for reason, n := range skips {
+		parts = append(parts, fmt.Sprintf("skipped %d (%s)", n, reason))
+	}
+	if len(parts) == 0 {
+		return "No requests were selected."
+	}
+	return strings.Join(parts, ", ") + "."
 }
 
 // tierPolicyFor resolves the tier policy governing a role (empty-ish default if unknown).
