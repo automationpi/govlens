@@ -83,8 +83,8 @@
 
   <h2 id="rbac">Role assignments (RBAC)
     <span class="sub">
-      {{if or .RBACType .RBACQuery}}{{len .RBAC}} of {{.RBACMatched}} matching · {{.RBACAll}} total
-      {{else if gt .RBACAll (len .RBAC)}}showing first {{len .RBAC}} of {{.RBACAll}}
+      {{if or .RBACType .RBACQuery}}{{.RBACFirstRow}}–{{.RBACLastRow}} of {{.RBACMatched}} matching · {{.RBACAll}} total
+      {{else if gt .RBACAll .RBACCap}}{{.RBACFirstRow}}–{{.RBACLastRow}} of {{.RBACAll}}
       {{else}}{{.RBACAll}} total{{end}}
     </span>
   </h2>
@@ -116,6 +116,16 @@
       {{end}}
       </tbody>
     </table></div>
+    {{if gt .RBACPages 1}}
+    <div class="foot" style="border:0;margin-top:12px;padding:0">
+      <span class="sub">Showing {{.RBACFirstRow}}–{{.RBACLastRow}} of {{if or .RBACType .RBACQuery .Sub}}{{.RBACMatched}}{{else}}{{.RBACAll}}{{end}}</span>
+      <span class="chips">
+        {{if .RBACHasPrev}}<a class="markbtn" href="/run?run={{.Run.ID}}{{if .RBACType}}&rbac_type={{.RBACType}}{{end}}{{if .RBACQuery}}&rbac_q={{.RBACQuery | urlquery}}{{end}}{{if .Sub}}&sub={{.Sub | urlquery}}{{end}}&rbac_page={{.RBACPrevPage}}#rbac">← Prev</a>{{end}}
+        <span class="sub">page {{.RBACPage}} of {{.RBACPages}}</span>
+        {{if .RBACHasNext}}<a class="markbtn" href="/run?run={{.Run.ID}}{{if .RBACType}}&rbac_type={{.RBACType}}{{end}}{{if .RBACQuery}}&rbac_q={{.RBACQuery | urlquery}}{{end}}{{if .Sub}}&sub={{.Sub | urlquery}}{{end}}&rbac_page={{.RBACNextPage}}#rbac">Next →</a>{{end}}
+      </span>
+    </div>
+    {{end}}
     {{else}}<div class="empty">{{if or .RBACType .RBACQuery}}No assignments match the filter.{{else}}No RBAC assignments in this run.{{end}}</div>{{end}}
   </div>
 

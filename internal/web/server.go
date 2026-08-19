@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -218,6 +219,14 @@ type runDetailData struct {
 	CAAll       int
 	DirRoleAll  int
 	RBACCap       int
+	RBACPage      int // 1-based page for the RBAC table
+	RBACPages     int // total pages given the active filter
+	RBACFirstRow  int // 1-based index of the first row on this page
+	RBACLastRow   int // 1-based index of the last row on this page
+	RBACHasPrev   bool
+	RBACHasNext   bool
+	RBACPrevPage  int
+	RBACNextPage  int
 	Marked        map[string]string // target ident -> open request status
 	Protected     map[string]bool   // role name -> non-revocable
 	Blocked       map[string]bool   // principal type -> non-revocable
@@ -257,12 +266,36 @@ func (s *Server) runDetail(w http.ResponseWriter, r *http.Request) {
 	// RBAC filters (server-side, so they search all assignments, not just the page).
 	d.RBACType = r.URL.Query().Get("rbac_type")
 	d.RBACQuery = strings.TrimSpace(r.URL.Query().Get("rbac_q"))
-	d.RBAC, _ = s.store.RunAssignments(ctx, id, "rbac", d.RBACType, d.RBACQuery, d.Sub, d.RBACCap)
 	d.RBACAll = s.store.AssignmentCount(ctx, id, "rbac")
 	d.RBACMatched = s.store.AssignmentMatchCount(ctx, id, "rbac", d.RBACType, d.RBACQuery, d.Sub)
 
-	d.CA, _ = s.store.RunAssignments(ctx, id, "ca_policy", "", "", "", 200)
-	d.DirRoles, _ = s.store.RunAssignments(ctx, id, "entra_role", "", "", "", 500)
+	// Paginate the RBAC table. Total rows depends on whether a filter is active.
+	rbacTotal := d.RBACAll
+	if d.RBACType != "" || d.RBACQuery != "" || d.Sub != "" {
+		rbacTotal = d.RBACMatched
+	}
+	d.RBACPage = 1
+	if p, err := strconv.Atoi(r.URL.Query().Get("rbac_page")); err == nil && p > 1 {
+		d.RBACPage = p
+	}
+	d.RBACPages = (rbacTotal + d.RBACCap - 1) / d.RBACCap
+	if d.RBACPages < 1 {
+		d.RBACPages = 1
+	}
+	if d.RBACPage > d.RBACPages {
+		d.RBACPage = d.RBACPages
+	}
+	offset := (d.RBACPage - 1) * d.RBACCap
+	d.RBAC, _ = s.store.RunAssignments(ctx, id, "rbac", d.RBACType, d.RBACQuery, d.Sub, d.RBACCap, offset)
+	if len(d.RBAC) > 0 {
+		d.RBACFirstRow = offset + 1
+		d.RBACLastRow = offset + len(d.RBAC)
+	}
+	d.RBACHasPrev, d.RBACPrevPage = d.RBACPage > 1, d.RBACPage-1
+	d.RBACHasNext, d.RBACNextPage = d.RBACPage < d.RBACPages, d.RBACPage+1
+
+	d.CA, _ = s.store.RunAssignments(ctx, id, "ca_policy", "", "", "", 200, 0)
+	d.DirRoles, _ = s.store.RunAssignments(ctx, id, "entra_role", "", "", "", 500, 0)
 	d.CAAll = s.store.AssignmentCount(ctx, id, "ca_policy")
 	d.DirRoleAll = s.store.AssignmentCount(ctx, id, "entra_role")
 	d.Marked, _ = s.store.OpenRevokeTargets(ctx, run.Tenant)

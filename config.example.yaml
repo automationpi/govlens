@@ -15,6 +15,11 @@ database:
   # Bring your own Postgres - GovLens never manages a database. It auto-creates
   # its schema on first start, so an empty DB (with create-table rights) is enough.
   dsn: "${DATABASE_URL}"          # e.g. postgres://user:pass@host:5432/govlens?sslmode=require
+  # Bootstrap behavior against an EXISTING database. Default is reuse, so pulling a
+  # new image or restarting never destroys data - the schema is applied idempotently.
+  #   reuse  (default) - keep all existing data; add any missing tables/columns only.
+  #   fresh            - DROP GovLens's tables on boot, then recreate (explicit wipe).
+  init: reuse
 
 server:
   addr: ":8080"

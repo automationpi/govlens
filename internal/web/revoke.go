@@ -1,7 +1,9 @@
 package web
 
 import (
+	"context"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,6 +17,7 @@ func (s *Server) revokeRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/requests", s.requestsPage)
 	mux.HandleFunc("/revoke/mark", s.revokeMark)
 	mux.HandleFunc("/revoke/decide", s.revokeDecide)
+	mux.HandleFunc("/revoke/decide-bulk", s.revokeDecideBulk)
 }
 
 // revokeMark opens a pending revoke request for one assignment. This only writes
@@ -87,33 +90,79 @@ func (s *Server) revokeDecide(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = r.ParseForm()
 	id := parseInt64(r.FormValue("id"))
-	// Scope-aware authorization: global approver/admin, or approver/admin of the
-	// request's subscription — unless the principal type requires global approval.
-	scope, ptype, err := s.store.RevokeRequestScopeType(r.Context(), id)
-	if err != nil {
-		http.Error(w, "request not found", http.StatusNotFound)
+	approve := r.FormValue("decision") == "approve"
+	tenant := r.FormValue("tenant")
+	outcome, reason := s.applyRevokeDecision(r.Context(), u, id, approve, r.FormValue("note"))
+	dest := "/requests?tenant=" + url.QueryEscape(tenant)
+	if outcome == "skipped" {
+		dest += "&err=" + url.QueryEscape(reason)
+	}
+	http.Redirect(w, r, dest, http.StatusSeeOther)
+}
+
+// revokeDecideBulk applies one decision (approve/reject) with a single note to every
+// selected revoke request. Revocations are immediate — no expiry. Each is authorized
+// against its own scope/type policy; any that can't be applied are skipped and summarized.
+func (s *Server) revokeDecideBulk(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
 		return
 	}
-	policy := s.store.TypePolicy(r.Context(), ptype)
-	if policy == "blocked" {
-		http.Error(w, "revocation of "+ptype+"s is disabled by admin policy", http.StatusForbidden)
+	u, ok := requireRole(w, r, "")
+	if !ok {
 		return
+	}
+	_ = r.ParseForm()
+	tenant := r.FormValue("tenant")
+	approve := r.FormValue("decision") == "approve"
+	note := r.FormValue("note")
+
+	var approved, rejected int
+	skips := map[string]int{}
+	for _, sid := range r.Form["sel"] {
+		id := parseInt64(sid)
+		if id == 0 {
+			continue
+		}
+		switch outcome, reason := s.applyRevokeDecision(r.Context(), u, id, approve, note); outcome {
+		case "approved":
+			approved++
+		case "rejected":
+			rejected++
+		default:
+			skips[reason]++
+		}
+	}
+	http.Redirect(w, r, "/requests?tenant="+url.QueryEscape(tenant)+"&err="+url.QueryEscape(bulkSummary(approved, rejected, skips)), http.StatusSeeOther)
+}
+
+// applyRevokeDecision authorizes and applies a single revoke decision. It writes
+// nothing to the response — it returns a one-word outcome and, when skipped, a reason.
+func (s *Server) applyRevokeDecision(ctx context.Context, u *auth.User, id int64, approve bool, note string) (outcome, reason string) {
+	// Scope-aware authorization: global approver/admin, or approver/admin of the
+	// request's subscription — unless the principal type requires global approval.
+	scope, ptype, err := s.store.RevokeRequestScopeType(ctx, id)
+	if err != nil {
+		return "skipped", "not found"
+	}
+	policy := s.store.TypePolicy(ctx, ptype)
+	if policy == "blocked" {
+		return "skipped", ptype + " revocations disabled"
 	}
 	if policy == "global" {
 		if !u.IsApprover() { // must be a GLOBAL approver/admin
-			http.Error(w, "forbidden: "+ptype+" revocations require a global approver", http.StatusForbidden)
-			return
+			return "skipped", "needs global approver"
 		}
 	} else if !u.CanApprove(scope) {
-		http.Error(w, "forbidden: you may not approve requests for this scope", http.StatusForbidden)
-		return
+		return "skipped", "not your scope"
 	}
-	approve := r.FormValue("decision") == "approve"
-	if err := s.store.DecideRevokeRequest(r.Context(), id, approve, u.Email, r.FormValue("note")); err != nil {
-		http.Error(w, err.Error(), 400)
-		return
+	if err := s.store.DecideRevokeRequest(ctx, id, approve, u.Email, note); err != nil {
+		return "skipped", err.Error()
 	}
-	http.Redirect(w, r, "/requests?tenant="+r.FormValue("tenant"), http.StatusSeeOther)
+	if approve {
+		return "approved", ""
+	}
+	return "rejected", ""
 }
 
 // actorRef maps a short handle (the part before @) to a full identity, for the

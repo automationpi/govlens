@@ -158,8 +158,14 @@ func runCycle(ctx context.Context, st *store.Store, sp *collect.SP, cfg config) 
 		}
 		exists, err := c.Exists(ctx, r.Kind, r.TargetIdent)
 		if err != nil {
-			log.Printf("  SKIP  #%d %s — re-validate error: %v", r.ID, label, err)
-			skipped++
+			// A re-validate error (e.g. a 403 from a missing Graph permission) must
+			// surface, not silently re-queue every cycle. Mark it failed with the
+			// reason so operators can see it; re-request to retry once the cause is fixed.
+			log.Printf("  FAIL  #%d %s — re-validate error: %v", r.ID, label, err)
+			if cfg.execute {
+				_ = st.SetRequestStatus(ctx, r.ID, "failed", "re-validate error: "+err.Error())
+			}
+			failed++
 			continue
 		}
 		if !exists {
