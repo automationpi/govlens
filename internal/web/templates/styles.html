@@ -159,7 +159,7 @@
   .foot strong{color:var(--ink);font-weight:650}
 </style>{{end}}
 
-{{define "topnav"}}{{$u := .User}}<div class="topnav">{{if $u}}<span class="chip" title="{{$u.Email}}">{{$u.Name}}{{range $u.Roles}} <span class="rolebadge">{{.}}</span>{{end}}</span><span class="sep">·</span><a href="/request{{if .Tenant}}?tenant={{.Tenant}}{{end}}">Request access</a><span class="sep">·</span>{{end}}<a href="/requests{{if .Tenant}}?tenant={{.Tenant}}{{end}}">Requests</a>{{if and $u $u.IsAdmin}}<span class="sep">·</span><a href="/admin">Admin</a>{{end}}{{if and $u (ne $u.Provider "none")}}<span class="sep">·</span><a href="/auth/logout">Sign out</a>{{end}}</div>{{end}}
+{{define "topnav"}}{{$u := .User}}<div class="topnav">{{if $u}}<span class="chip" title="{{$u.Email}}">{{$u.Name}}{{range $u.Roles}} <span class="rolebadge">{{.}}</span>{{end}}</span><span class="sep">·</span><a href="/request{{if .Tenant}}?tenant={{.Tenant}}{{end}}">Request access</a><span class="sep">·</span>{{end}}<a href="/run/latest{{if .Tenant}}?tenant={{.Tenant}}{{end}}">Manage access</a><span class="sep">·</span><a href="/requests{{if .Tenant}}?tenant={{.Tenant}}{{end}}">Requests</a>{{if and $u $u.IsAdmin}}<span class="sep">·</span><a href="/admin">Admin</a>{{end}}{{if and $u (ne $u.Provider "none")}}<span class="sep">·</span><a href="/auth/logout">Sign out</a>{{end}}</div>{{end}}
 
 {{define "topbar"}}<div class="topbar"><a class="brand" href="/{{if .Tenant}}?tenant={{.Tenant}}{{end}}">Azure Gov<span class="lens">Lens</span></a>{{template "topnav" .}}</div>{{end}}
 

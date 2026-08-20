@@ -1,0 +1,50 @@
+{{define "runs.html"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Azure GovLens — Runs · {{.TenantDisplay}}</title>
+{{template "styles"}}
+</head>
+<body>
+<div class="wrap">
+  {{template "topbar" dict "User" .User "Tenant" .Tenant}}
+  <header>
+    <div>
+      <div class="sub">
+        <a class="back" href="/?tenant={{.Tenant}}">← {{.TenantDisplay}}</a> · Runs
+      </div>
+    </div>
+    <div class="sub" style="text-align:right">collection history</div>
+  </header>
+
+  <h2>Runs <span class="sub">{{.Total}} total · click to drill in</span></h2>
+  <div class="card">
+    {{if .Runs}}
+    <div class="tablewrap"><table>
+      <thead><tr><th>Collected</th><th>Sources</th><th></th></tr></thead>
+      <tbody>
+      {{range .Runs}}
+        <tr>
+          <td><a class="rowlink" href="/run?run={{.ID}}">{{datetime .CollectedAt}}</a></td>
+          <td>{{range .Sources}}<span class="badge b-src">{{.}}</span>{{end}}</td>
+          <td><a class="rowlink" href="/run?run={{.ID}}">details →</a></td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table></div>
+    <div class="foot" style="border:0;margin-top:12px;padding:0">
+      <span class="sub">Showing {{.FirstRow}}–{{.LastRow}} of {{.Total}}</span>
+      <span class="chips">
+        {{if .HasPrev}}<a class="markbtn" href="/runs?tenant={{.Tenant}}&page={{.PrevPage}}">← Prev</a>{{end}}
+        <span class="sub">page {{.Page}}</span>
+        {{if .HasNext}}<a class="markbtn" href="/runs?tenant={{.Tenant}}&page={{.NextPage}}">Next →</a>{{end}}
+      </span>
+    </div>
+    {{else}}<div class="empty">No runs collected yet.</div>{{end}}
+  </div>
+
+  {{template "footer"}}
+</div>
+</body>
+</html>{{end}}

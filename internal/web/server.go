@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -89,6 +90,8 @@ func (s *Server) Routes() http.Handler {
 	s.grantRoutes(mux)
 	s.driftRoutes(mux)
 	mux.HandleFunc("/run", s.runDetail)
+	mux.HandleFunc("/run/latest", s.runLatest)
+	mux.HandleFunc("/runs", s.runsPage)
 	mux.HandleFunc("/", s.dashboard)
 	return s.authMiddleware(mux)
 }
@@ -180,8 +183,9 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 	d.PolicyLine = buildLine(trend, func(t store.TrendPoint) float64 { return t.PolicyPct })
 	d.MaesterLine = buildLine(trend, func(t store.TrendPoint) float64 { return t.MaesterPct })
 
-	// Runs history (newest first) for the drill-in list.
-	for i := len(trend) - 1; i >= 0; i-- {
+	// Runs: the dashboard shows only the latest two (newest first); the full,
+	// paginated history lives at /runs.
+	for i := len(trend) - 1; i >= 0 && len(d.RunList) < 2; i-- {
 		d.RunList = append(d.RunList, trend[i].Run)
 	}
 
@@ -310,6 +314,78 @@ func (s *Server) runDetail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.render(w, "run.html", d)
+}
+
+type runsData struct {
+	User          *auth.User
+	Tenant        string
+	TenantDisplay string
+	Tenants       []store.TenantInfo
+	Runs          []store.Run
+	Total         int
+	Page          int
+	FirstRow      int
+	LastRow       int
+	HasPrev       bool
+	HasNext       bool
+	PrevPage      int
+	NextPage      int
+}
+
+// runLatest redirects to the newest run's detail page. Backs the "Manage access"
+// nav link so it always lands on the current snapshot without knowing its id.
+func (s *Server) runLatest(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenants, _ := s.store.Tenants(ctx)
+	tenant := s.resolveTenant(r, tenants)
+	runs, err := s.store.Runs(ctx, tenant)
+	if err != nil || len(runs) == 0 {
+		http.Redirect(w, r, "/?tenant="+url.QueryEscape(tenant), http.StatusSeeOther)
+		return
+	}
+	latest := runs[len(runs)-1] // Runs is ordered oldest..newest
+	http.Redirect(w, r, "/run?run="+strconv.FormatInt(latest.ID, 10), http.StatusSeeOther)
+}
+
+// runsPage renders the full run history, newest first, paginated (20/page).
+func (s *Server) runsPage(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenants, err := s.store.Tenants(ctx)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	tenant := s.resolveTenant(r, tenants)
+	runs, err := s.store.Runs(ctx, tenant)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	rev := make([]store.Run, len(runs)) // newest first
+	for i := range runs {
+		rev[i] = runs[len(runs)-1-i]
+	}
+	const per = 20
+	d := runsData{User: userOf(r), Tenant: tenant, TenantDisplay: displayFor(tenants, tenant),
+		Tenants: tenants, Total: len(rev), Page: 1}
+	if p, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && p > 1 {
+		d.Page = p
+	}
+	start := (d.Page - 1) * per
+	if start > len(rev) {
+		start = len(rev)
+	}
+	end := start + per
+	if end > len(rev) {
+		end = len(rev)
+	}
+	d.Runs = rev[start:end]
+	if len(d.Runs) > 0 {
+		d.FirstRow, d.LastRow = start+1, end
+	}
+	d.HasPrev, d.PrevPage = d.Page > 1, d.Page-1
+	d.HasNext, d.NextPage = end < len(rev), d.Page+1
+	s.render(w, "runs.html", d)
 }
 
 func (s *Server) render(w http.ResponseWriter, name string, d any) {
