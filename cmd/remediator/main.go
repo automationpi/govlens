@@ -110,6 +110,7 @@ func runCycle(ctx context.Context, st *store.Store, sp *collect.SP, cfg config) 
 	}
 
 	protected, _ := st.ProtectedRoleSet(ctx)
+	protectedPrincipals, _ := st.ProtectedPrincipalPatterns(ctx)
 	typePolicies, _ := st.TypePolicies(ctx)
 
 	// The Global-Admin floor guard needs Graph; only fetch it when the batch
@@ -137,6 +138,14 @@ func runCycle(ctx context.Context, st *store.Store, sp *collect.SP, cfg config) 
 			skipped++
 			if cfg.execute {
 				_ = st.SetRequestStatus(ctx, r.ID, "skipped", "role is protected")
+			}
+			continue
+		}
+		if store.MatchProtectedPrincipal(r.Principal, protectedPrincipals) {
+			log.Printf("  SKIP  #%d %s — principal is protected (non-revocable by admin policy)", r.ID, label)
+			skipped++
+			if cfg.execute {
+				_ = st.SetRequestStatus(ctx, r.ID, "skipped", "principal is protected")
 			}
 			continue
 		}

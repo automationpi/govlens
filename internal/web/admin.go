@@ -19,6 +19,8 @@ func (s *Server) adminRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/admin/revoke", s.adminRevoke)
 	mux.HandleFunc("/admin/protect", s.adminProtect)
 	mux.HandleFunc("/admin/unprotect", s.adminUnprotect)
+	mux.HandleFunc("/admin/protect-principal", s.adminProtectPrincipal)
+	mux.HandleFunc("/admin/unprotect-principal", s.adminUnprotectPrincipal)
 	mux.HandleFunc("/admin/typepolicy", s.adminTypePolicy)
 	mux.HandleFunc("/admin/module", s.adminModule)
 	mux.HandleFunc("/admin/grantsp", s.adminGrantSP)
@@ -30,9 +32,10 @@ func (s *Server) adminRoutes(mux *http.ServeMux) {
 type adminData struct {
 	User          *auth.User
 	Tenant        string
-	Users         []store.AppUser
-	Protected     []store.ProtectedRole
-	Subscriptions []store.Subscription
+	Users            []store.AppUser
+	Protected        []store.ProtectedRole
+	ProtectedPrincs  []store.ProtectedPrincipal
+	Subscriptions    []store.Subscription
 	TypePolicies  map[string]string // principal type -> "" | blocked | global
 	Enabled       bool
 	Notice        string // transient banner (e.g. why "go live" was refused)
@@ -65,6 +68,7 @@ func (s *Server) adminPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	prot, _ := s.store.ProtectedRoles(ctx)
+	protP, _ := s.store.ProtectedPrincipals(ctx)
 	tenant := s.adminTenant(r)
 	var subs []store.Subscription
 	if tenant != "" {
@@ -72,7 +76,7 @@ func (s *Server) adminPage(w http.ResponseWriter, r *http.Request) {
 	}
 	tp, _ := s.store.TypePolicies(ctx)
 
-	d := adminData{User: u, Tenant: tenant, Users: users, Protected: prot,
+	d := adminData{User: u, Tenant: tenant, Users: users, Protected: prot, ProtectedPrincs: protP,
 		Subscriptions: subs, TypePolicies: tp, Enabled: s.auth.Enabled, OptIns: map[string]bool{},
 		Notice: r.URL.Query().Get("err")}
 	if tenant != "" {
@@ -335,6 +339,28 @@ func (s *Server) adminUnprotect(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	if role := r.FormValue("role"); role != "" {
 		_ = s.store.RemoveProtectedRole(r.Context(), role)
+	}
+	http.Redirect(w, r, "/admin", http.StatusSeeOther)
+}
+
+func (s *Server) adminProtectPrincipal(w http.ResponseWriter, r *http.Request) {
+	u, ok := requireRole(w, r, "admin") // tenant-wide policy -> global admin
+	if !ok {
+		return
+	}
+	_ = r.ParseForm()
+	if p := r.FormValue("pattern"); p != "" {
+		_ = s.store.AddProtectedPrincipal(r.Context(), p, u.Email)
+	}
+	http.Redirect(w, r, "/admin", http.StatusSeeOther)
+}
+func (s *Server) adminUnprotectPrincipal(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireRole(w, r, "admin"); !ok {
+		return
+	}
+	_ = r.ParseForm()
+	if p := r.FormValue("pattern"); p != "" {
+		_ = s.store.RemoveProtectedPrincipal(r.Context(), p)
 	}
 	http.Redirect(w, r, "/admin", http.StatusSeeOther)
 }

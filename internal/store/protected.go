@@ -105,3 +105,91 @@ func (s *Store) SetTypePolicy(ctx context.Context, ptype, policy, by string) err
 		ptype, policy, by)
 	return err
 }
+
+// --- protected principals (by exact name or a trailing-'*' wildcard pattern) ---
+
+type ProtectedPrincipal struct {
+	Pattern string
+	AddedBy string
+	AddedAt time.Time
+}
+
+// ProtectedPrincipals lists principals (or name patterns) that may not be revoked.
+func (s *Store) ProtectedPrincipals(ctx context.Context) ([]ProtectedPrincipal, error) {
+	rows, err := s.Pool.Query(ctx,
+		`SELECT pattern, COALESCE(added_by,''), added_at FROM protected_principals ORDER BY pattern`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ProtectedPrincipal
+	for rows.Next() {
+		var p ProtectedPrincipal
+		if err := rows.Scan(&p.Pattern, &p.AddedBy, &p.AddedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// ProtectedPrincipalPatterns returns just the patterns, for matching.
+func (s *Store) ProtectedPrincipalPatterns(ctx context.Context) ([]string, error) {
+	list, err := s.ProtectedPrincipals(ctx)
+	if err != nil {
+		return nil, err
+	}
+	pats := make([]string, 0, len(list))
+	for _, p := range list {
+		pats = append(pats, p.Pattern)
+	}
+	return pats, nil
+}
+
+func (s *Store) AddProtectedPrincipal(ctx context.Context, pattern, by string) error {
+	pattern = strings.TrimSpace(pattern)
+	if pattern == "" {
+		return nil
+	}
+	_, err := s.Pool.Exec(ctx,
+		`INSERT INTO protected_principals (pattern, added_by) VALUES ($1,$2) ON CONFLICT DO NOTHING`, pattern, by)
+	return err
+}
+
+func (s *Store) RemoveProtectedPrincipal(ctx context.Context, pattern string) error {
+	_, err := s.Pool.Exec(ctx, `DELETE FROM protected_principals WHERE pattern=$1`, pattern)
+	return err
+}
+
+// MatchProtectedPrincipal reports whether a principal name matches any protected
+// pattern. Matching is case-insensitive; a trailing '*' is a prefix wildcard, so
+// "Microsoft*" protects every principal whose name starts with "Microsoft".
+func MatchProtectedPrincipal(name string, patterns []string) bool {
+	n := strings.ToLower(strings.TrimSpace(name))
+	if n == "" {
+		return false
+	}
+	for _, p := range patterns {
+		p = strings.ToLower(strings.TrimSpace(p))
+		switch {
+		case p == "":
+			continue
+		case strings.HasSuffix(p, "*"):
+			if strings.HasPrefix(n, strings.TrimSuffix(p, "*")) {
+				return true
+			}
+		case n == p:
+			return true
+		}
+	}
+	return false
+}
+
+// IsPrincipalProtected reports whether a principal name is protected from revoke.
+func (s *Store) IsPrincipalProtected(ctx context.Context, name string) bool {
+	pats, err := s.ProtectedPrincipalPatterns(ctx)
+	if err != nil {
+		return false
+	}
+	return MatchProtectedPrincipal(name, pats)
+}

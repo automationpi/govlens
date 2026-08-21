@@ -110,6 +110,18 @@ CREATE TABLE IF NOT EXISTS protected_roles (
     added_by TEXT,
     added_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Principals (or trailing-'*' name patterns, e.g. 'Microsoft*') that may never be
+-- revoked - enforced the same three ways as protected_roles.
+CREATE TABLE IF NOT EXISTS protected_principals (
+    pattern  TEXT PRIMARY KEY,
+    added_by TEXT,
+    added_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- Default: protect Microsoft first-party principals (Microsoft.Azure.SyncFabric,
+-- Microsoft Office 365 Portal, etc.) - revoking their role assignments breaks the tenant.
+INSERT INTO protected_principals (pattern, added_by) VALUES ('Microsoft*', 'system')
+    ON CONFLICT DO NOTHING;
 INSERT INTO protected_roles (role, added_by) VALUES ('Global Administrator', 'system')
     ON CONFLICT DO NOTHING;
 

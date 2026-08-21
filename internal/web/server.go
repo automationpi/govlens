@@ -232,9 +232,10 @@ type runDetailData struct {
 	RBACHasNext   bool
 	RBACPrevPage  int
 	RBACNextPage  int
-	Marked        map[string]string // target ident -> open request status
-	Protected     map[string]bool   // role name -> non-revocable
-	Blocked       map[string]bool   // principal type -> non-revocable
+	Marked             map[string]string // target ident -> open request status
+	Protected          map[string]bool   // role name -> non-revocable
+	Blocked            map[string]bool   // principal type -> non-revocable
+	ProtectedPrincipals map[string]bool  // principal name (of a shown row) -> non-revocable
 	Subscriptions []store.Subscription
 	Sub           string // selected subscription filter (id), "" = all
 }
@@ -312,6 +313,20 @@ func (s *Server) runDetail(w http.ResponseWriter, r *http.Request) {
 				d.Blocked[t] = true
 			}
 		}
+	}
+	// Flag which shown principals match a protected-principal pattern (exact or wildcard).
+	d.ProtectedPrincipals = map[string]bool{}
+	if pats, err := s.store.ProtectedPrincipalPatterns(ctx); err == nil && len(pats) > 0 {
+		mark := func(rows []store.AssignmentRow) {
+			for _, a := range rows {
+				if store.MatchProtectedPrincipal(a.Principal, pats) {
+					d.ProtectedPrincipals[a.Principal] = true
+				}
+			}
+		}
+		mark(d.RBAC)
+		mark(d.DirRoles)
+		mark(d.CA)
 	}
 	s.render(w, "run.html", d)
 }

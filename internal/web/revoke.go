@@ -52,6 +52,10 @@ func (s *Server) revokeMark(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "role '"+n.Role+"' is protected (non-revocable) by admin policy", http.StatusForbidden)
 		return
 	}
+	if s.store.IsPrincipalProtected(r.Context(), n.Principal) {
+		http.Error(w, "principal '"+n.Principal+"' is protected (non-revocable) by admin policy", http.StatusForbidden)
+		return
+	}
 	if s.store.TypePolicy(r.Context(), n.PrincipalType) == "blocked" {
 		http.Error(w, "revocation of "+n.PrincipalType+"s is disabled by admin policy", http.StatusForbidden)
 		return

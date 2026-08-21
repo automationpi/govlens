@@ -73,7 +73,7 @@
           <td>{{.Principal}}</td>
           <td><span class="badge {{if eq .PrincipalType "User"}}b-user{{else if eq .PrincipalType "Group"}}b-group{{else}}b-sp{{end}}">{{if .PrincipalType}}{{.PrincipalType}}{{else}}?{{end}}</span></td>
           <td class="sub">{{.Scope}}</td>
-          <td>{{template "markcell" dict "Row" . "Run" $.Run "Marked" $.Marked "Protected" $.Protected "Blocked" $.Blocked "Back" "dirroles"}}</td>
+          <td>{{template "markcell" dict "Row" . "Run" $.Run "Marked" $.Marked "Protected" $.Protected "Blocked" $.Blocked "PProtected" $.ProtectedPrincipals "Back" "dirroles"}}</td>
         </tr>
       {{end}}
       </tbody>
@@ -111,7 +111,7 @@
           <td><span class="badge {{if eq .PrincipalType "User"}}b-user{{else if eq .PrincipalType "Group"}}b-group{{else}}b-sp{{end}}">{{.PrincipalType}}</span></td>
           <td>{{.Role}}</td>
           <td><code class="scope">{{.Scope}}</code></td>
-          <td>{{template "markcell" dict "Row" . "Run" $.Run "Marked" $.Marked "Protected" $.Protected "Blocked" $.Blocked "Back" "rbac"}}</td>
+          <td>{{template "markcell" dict "Row" . "Run" $.Run "Marked" $.Marked "Protected" $.Protected "Blocked" $.Blocked "PProtected" $.ProtectedPrincipals "Back" "rbac"}}</td>
         </tr>
       {{end}}
       </tbody>
@@ -185,7 +185,7 @@
 </body>
 </html>{{end}}
 
-{{define "markcell"}}{{$m := index .Marked .Row.Ident}}{{if $m}}<span class="badge b-changed" title="a revoke request is open for this assignment">revoke · {{$m}}</span>{{else if index .Blocked .Row.PrincipalType}}<span class="badge b-src" title="revocation of this principal type is disabled by admin policy">🔒 {{.Row.PrincipalType}} blocked</span>{{else if index .Protected .Row.Role}}<span class="badge b-src" title="this role is protected (non-revocable) by admin policy">🔒 protected</span>{{else}}<form method="post" action="/revoke/mark" style="display:inline">
+{{define "markcell"}}{{$m := index .Marked .Row.Ident}}{{if $m}}<span class="badge b-changed" title="a revoke request is open for this assignment">revoke · {{$m}}</span>{{else if index .Blocked .Row.PrincipalType}}<span class="badge b-src" title="revocation of this principal type is disabled by admin policy">🔒 {{.Row.PrincipalType}} blocked</span>{{else if index .Protected .Row.Role}}<span class="badge b-src" title="this role is protected (non-revocable) by admin policy">🔒 protected</span>{{else if index .PProtected .Row.Principal}}<span class="badge b-src" title="this principal is protected (non-revocable) by admin policy">🔒 protected</span>{{else}}<form method="post" action="/revoke/mark" style="display:inline">
   <input type="hidden" name="tenant" value="{{.Run.Tenant}}">
   <input type="hidden" name="run" value="{{.Run.ID}}">
   <input type="hidden" name="kind" value="{{.Row.Kind}}">

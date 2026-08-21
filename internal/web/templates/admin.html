@@ -106,6 +106,40 @@
     {{end}}
   </div>
 
+  <h2>Non-revocable principals <span class="sub">{{len .ProtectedPrincs}}</span></h2>
+  <div class="card">
+    <form method="post" action="/admin/protect-principal" class="filters">
+      <input type="text" name="pattern" class="finput" placeholder="exact name, e.g. Microsoft.Azure.SyncFabric, or a pattern like Microsoft*" required>
+      <button class="fbtn" type="submit">Protect</button>
+    </form>
+    <div class="sub" style="margin-top:8px">
+      A principal listed here can never be revoked through this tool: the <strong>Revoke</strong> button is hidden,
+      the mark endpoint refuses it, and the worker skips it. A trailing <code>*</code> is a wildcard, so
+      <code>Microsoft*</code> protects every principal whose name starts with "Microsoft".
+    </div>
+    {{if .ProtectedPrincs}}
+    <div class="tablewrap" style="margin-top:12px"><table>
+      <thead><tr><th>Principal / pattern</th><th>Added by</th><th></th></tr></thead>
+      <tbody>
+      {{range .ProtectedPrincs}}
+        <tr>
+          <td>🔒 {{.Pattern}}</td>
+          <td class="sub">{{.AddedBy}}</td>
+          <td>
+            {{if ne .AddedBy "system"}}
+            <form method="post" action="/admin/unprotect-principal" style="display:inline">
+              <input type="hidden" name="pattern" value="{{.Pattern}}">
+              <button class="markbtn" type="submit">remove</button>
+            </form>
+            {{else}}<span class="sub">default</span>{{end}}
+          </td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table></div>
+    {{end}}
+  </div>
+
   {{if .User.IsAdmin}}
   <h2>Principal-type policy <span class="sub">who can be revoked, by identity type</span></h2>
   <div class="card">
