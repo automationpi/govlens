@@ -182,13 +182,17 @@
       '<button type="button" class="modal-btn danger modal-ok">Confirm</button></div></div>';
     document.body.appendChild(ov);
     var msg = ov.querySelector('.modal-msg'), okb = ov.querySelector('.modal-ok'), cb = ov.querySelector('.modal-cancel');
-    var pending = null;
-    function close(){ ov.classList.remove('open'); pending = null; }
-    function open(text, onOk){ msg.textContent = text; pending = onOk; ov.classList.add('open'); okb.focus(); }
+    var pending = null, armed = false;
+    function close(){ ov.classList.remove('open'); pending = null; armed = false; }
+    function open(text, onOk){
+      msg.textContent = text; pending = onOk; armed = false;
+      ov.classList.add('open'); cb.focus();               // default focus = Cancel (safe for destructive actions)
+      setTimeout(function(){ armed = true; }, 300);        // Confirm is inert briefly, so no ghost/double-click can confirm
+    }
     cb.addEventListener('click', close);
     ov.addEventListener('click', function (e){ if (e.target === ov) close(); });
     document.addEventListener('keydown', function (e){ if (e.key === 'Escape' && ov.classList.contains('open')) close(); });
-    okb.addEventListener('click', function (){ var p = pending; close(); if (p) p(); });
+    okb.addEventListener('click', function (){ if (!armed) return; var p = pending; close(); if (p) p(); });
     // Public API + auto-wiring for any form carrying data-confirm.
     window.govConfirm = function (text, onOk){ open(text, onOk); };
     document.querySelectorAll('form[data-confirm]').forEach(function (f) {
