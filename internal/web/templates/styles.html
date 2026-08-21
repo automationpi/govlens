@@ -159,7 +159,47 @@
     justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;color:var(--muted);font-size:12px}
   .foot .lens{color:var(--accent)}
   .foot strong{color:var(--ink);font-weight:650}
-</style>{{end}}
+  .modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:2000;padding:20px}
+  .modal-ov.open{display:flex}
+  .modal-box{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:14px;max-width:440px;width:100%;padding:22px 22px 18px;box-shadow:0 24px 70px rgba(0,0,0,.4)}
+  .modal-box h3{margin:0 0 10px;font-size:16px}
+  .modal-box p{margin:0 0 20px;font-size:14px;color:var(--muted);line-height:1.55}
+  .modal-row{display:flex;gap:10px;justify-content:flex-end}
+  .modal-btn{padding:8px 16px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;font-size:13.5px}
+  .modal-btn:hover{border-color:var(--accent)}
+  .modal-btn.danger{background:var(--bad);border-color:var(--bad);color:#fff}
+  .modal-btn.danger:hover{filter:brightness(1.08)}
+</style>
+<script>
+(function () {
+  function ready(fn){ if (document.readyState !== 'loading') fn(); else document.addEventListener('DOMContentLoaded', fn); }
+  ready(function () {
+    var ov = document.createElement('div');
+    ov.className = 'modal-ov';
+    ov.innerHTML = '<div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="mdl-t">' +
+      '<h3 id="mdl-t">Please confirm</h3><p class="modal-msg"></p>' +
+      '<div class="modal-row"><button type="button" class="modal-btn modal-cancel">Cancel</button>' +
+      '<button type="button" class="modal-btn danger modal-ok">Confirm</button></div></div>';
+    document.body.appendChild(ov);
+    var msg = ov.querySelector('.modal-msg'), okb = ov.querySelector('.modal-ok'), cb = ov.querySelector('.modal-cancel');
+    var pending = null;
+    function close(){ ov.classList.remove('open'); pending = null; }
+    function open(text, onOk){ msg.textContent = text; pending = onOk; ov.classList.add('open'); okb.focus(); }
+    cb.addEventListener('click', close);
+    ov.addEventListener('click', function (e){ if (e.target === ov) close(); });
+    document.addEventListener('keydown', function (e){ if (e.key === 'Escape' && ov.classList.contains('open')) close(); });
+    okb.addEventListener('click', function (){ var p = pending; close(); if (p) p(); });
+    // Public API + auto-wiring for any form carrying data-confirm.
+    window.govConfirm = function (text, onOk){ open(text, onOk); };
+    document.querySelectorAll('form[data-confirm]').forEach(function (f) {
+      f.addEventListener('submit', function (e) {
+        e.preventDefault();
+        open(f.getAttribute('data-confirm'), function () { f.submit(); });
+      });
+    });
+  });
+})();
+</script>{{end}}
 
 {{define "topnav"}}{{$u := .User}}<div class="topnav">{{if $u}}<span class="chip" title="{{$u.Email}}">{{$u.Name}}{{range $u.Roles}} <span class="rolebadge">{{.}}</span>{{end}}</span><span class="sep">·</span><a href="/request{{if .Tenant}}?tenant={{.Tenant}}{{end}}">Request access</a><span class="sep">·</span>{{end}}<a href="/run/latest{{if .Tenant}}?tenant={{.Tenant}}{{end}}">Manage access</a><span class="sep">·</span><a href="/requests{{if .Tenant}}?tenant={{.Tenant}}{{end}}">Requests</a>{{if and $u $u.IsAdmin}}<span class="sep">·</span><a href="/admin">Admin</a>{{end}}{{if and $u (ne $u.Provider "none")}}<span class="sep">·</span><a href="/auth/logout">Sign out</a>{{end}}</div>{{end}}
 
