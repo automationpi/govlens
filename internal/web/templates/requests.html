@@ -222,6 +222,14 @@
     perm.addEventListener('change', sync);
     sync();
   });
+  // Confirm before rejecting an out-of-band change, since reject removes live access.
+  document.querySelectorAll('form[action^="/drift/decide"] button[value="reject"]').forEach(function (b) {
+    b.addEventListener('click', function (e) {
+      if (!confirm('Reject the selected out-of-band change(s)? The remediator will REMOVE the live access on its next cycle.')) {
+        e.preventDefault();
+      }
+    });
+  });
 })();
 </script>
 </body>
